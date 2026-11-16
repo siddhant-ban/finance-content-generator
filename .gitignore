@@ -218,3 +218,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local foundation runtime and editor metadata
+.DS_Store
+data/
+artifacts/
+.superpowers/

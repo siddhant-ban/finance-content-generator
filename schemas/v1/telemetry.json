@@ -1,0 +1,429 @@
+{
+  "models": {
+    "CollectorHealth": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "title": "Available",
+          "type": "boolean"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "unavailable",
+                "invalid_endpoint"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status_code": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Status Code"
+        }
+      },
+      "required": [
+        "available"
+      ],
+      "title": "CollectorHealth",
+      "type": "object"
+    },
+    "EnqueueResult": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted": {
+          "title": "Accepted",
+          "type": "boolean"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "capacity_exceeded",
+                "persistence_failed",
+                "export_failed",
+                "export_timeout",
+                "invalid_record",
+                "duplicate_conflict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accepted"
+      ],
+      "title": "EnqueueResult",
+      "type": "object"
+    },
+    "ExportReport": {
+      "additionalProperties": false,
+      "properties": {
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "capacity_exceeded",
+                "persistence_failed",
+                "export_failed",
+                "export_timeout",
+                "invalid_record",
+                "duplicate_conflict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "exported": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Exported",
+          "type": "integer"
+        },
+        "pending_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pending Count"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pending_count"
+      ],
+      "title": "ExportReport",
+      "type": "object"
+    },
+    "HealthReport": {
+      "additionalProperties": false,
+      "properties": {
+        "degraded": {
+          "title": "Degraded",
+          "type": "boolean"
+        },
+        "degraded_runs": {
+          "default": [],
+          "items": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "title": "Degraded Runs",
+          "type": "array"
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "capacity_exceeded",
+                "persistence_failed",
+                "export_failed",
+                "export_timeout",
+                "invalid_record",
+                "duplicate_conflict"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error Code"
+        },
+        "export_failures": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Export Failures",
+          "type": "integer"
+        },
+        "lost_records": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Lost Records",
+          "type": "integer"
+        },
+        "pending_bytes": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pending Bytes"
+        },
+        "pending_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pending Count"
+        },
+        "persistence_failures": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Persistence Failures",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "pending_count",
+        "pending_bytes",
+        "degraded"
+      ],
+      "title": "HealthReport",
+      "type": "object"
+    },
+    "SpanEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "timestamp_ns": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Timestamp Ns",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "timestamp_ns"
+      ],
+      "title": "SpanEvent",
+      "type": "object"
+    },
+    "SpanRecord": {
+      "$defs": {
+        "SpanEvent": {
+          "additionalProperties": false,
+          "properties": {
+            "attributes": {
+              "additionalProperties": true,
+              "title": "Attributes",
+              "type": "object"
+            },
+            "name": {
+              "title": "Name",
+              "type": "string"
+            },
+            "timestamp_ns": {
+              "maximum": 18446744073709551615,
+              "minimum": 0,
+              "title": "Timestamp Ns",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "name",
+            "timestamp_ns"
+          ],
+          "title": "SpanEvent",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "attributes": {
+          "additionalProperties": true,
+          "title": "Attributes",
+          "type": "object"
+        },
+        "end_time_ns": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "End Time Ns",
+          "type": "integer"
+        },
+        "events": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SpanEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "export_status": {
+          "const": "pending",
+          "default": "pending",
+          "title": "Export Status",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "parent_span_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Span Id"
+        },
+        "project": {
+          "title": "Project",
+          "type": "string"
+        },
+        "resource": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Resource",
+          "type": "object"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Id"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "span_id": {
+          "pattern": "^[0-9a-f]{16}$",
+          "title": "Span Id",
+          "type": "string"
+        },
+        "start_time_ns": {
+          "maximum": 18446744073709551615,
+          "minimum": 0,
+          "title": "Start Time Ns",
+          "type": "integer"
+        },
+        "status": {
+          "default": "UNSET",
+          "enum": [
+            "UNSET",
+            "OK",
+            "ERROR"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "story_id": {
+          "anyOf": [
+            {
+              "format": "uuid",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Story Id"
+        },
+        "trace_flags": {
+          "default": 1,
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Trace Flags",
+          "type": "integer"
+        },
+        "trace_id": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Trace Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "trace_id",
+        "span_id",
+        "project",
+        "name",
+        "start_time_ns",
+        "end_time_ns"
+      ],
+      "title": "SpanRecord",
+      "type": "object"
+    }
+  },
+  "schema_version": "1.0"
+}

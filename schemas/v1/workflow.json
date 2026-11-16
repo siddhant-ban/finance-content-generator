@@ -1,0 +1,281 @@
+{
+  "models": {
+    "PolicyReport": {
+      "$defs": {
+        "PolicyCheck": {
+          "additionalProperties": false,
+          "properties": {
+            "code": {
+              "minLength": 1,
+              "title": "Code",
+              "type": "string"
+            },
+            "passed": {
+              "title": "Passed",
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "code",
+            "passed"
+          ],
+          "title": "PolicyCheck",
+          "type": "object"
+        },
+        "RevisionRef": {
+          "additionalProperties": false,
+          "properties": {
+            "record_id": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "record_id",
+            "revision",
+            "sha256"
+          ],
+          "title": "RevisionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "checks": {
+          "items": {
+            "$ref": "#/$defs/PolicyCheck"
+          },
+          "title": "Checks",
+          "type": "array"
+        },
+        "critical_failures": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Critical Failures",
+          "type": "array"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "ready": {
+          "title": "Ready",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "ready",
+        "checks"
+      ],
+      "title": "PolicyReport",
+      "type": "object"
+    },
+    "ReviewManifest": {
+      "$defs": {
+        "ArtifactRef": {
+          "additionalProperties": false,
+          "properties": {
+            "media_type": {
+              "minLength": 1,
+              "title": "Media Type",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            },
+            "size_bytes": {
+              "minimum": 0,
+              "title": "Size Bytes",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "sha256",
+            "media_type",
+            "size_bytes"
+          ],
+          "title": "ArtifactRef",
+          "type": "object"
+        },
+        "RevisionRef": {
+          "additionalProperties": false,
+          "properties": {
+            "record_id": {
+              "format": "uuid",
+              "title": "Record Id",
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "sha256": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          "required": [
+            "record_id",
+            "revision",
+            "sha256"
+          ],
+          "title": "RevisionRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "asset_register": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "attributions": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "captions": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "charts": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "claim_revision_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Claim Revision Refs",
+          "type": "array"
+        },
+        "dossier": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "internal_label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Internal Label"
+        },
+        "kind": {
+          "enum": [
+            "synthetic_foundation",
+            "editorial"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "render": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "script": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "source_revision_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/RevisionRef"
+          },
+          "title": "Source Revision Refs",
+          "type": "array"
+        },
+        "story_id": {
+          "format": "uuid",
+          "title": "Story Id",
+          "type": "string"
+        },
+        "subtitles": {
+          "$ref": "#/$defs/ArtifactRef"
+        },
+        "verification": {
+          "$ref": "#/$defs/ArtifactRef"
+        }
+      },
+      "required": [
+        "story_id",
+        "revision",
+        "kind",
+        "script",
+        "dossier",
+        "verification",
+        "render",
+        "subtitles",
+        "captions",
+        "charts",
+        "attributions",
+        "asset_register"
+      ],
+      "title": "ReviewManifest",
+      "type": "object"
+    },
+    "RevisionRef": {
+      "additionalProperties": false,
+      "properties": {
+        "record_id": {
+          "format": "uuid",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "record_id",
+        "revision",
+        "sha256"
+      ],
+      "title": "RevisionRef",
+      "type": "object"
+    }
+  },
+  "schema_version": "1.0"
+}

@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0",
+  "agent_name": "foundation",
+  "agent_version": "1.0.0",
+  "dataset_version": "1.0.0",
+  "kind": "synthetic_foundation",
+  "input_schema": "foundation_fixture.input/1.0",
+  "reference_schema": "foundation_fixture.reference/1.0",
+  "files": {
+    "dev": {
+      "path": "dev.jsonl",
+      "sha256": "cd56a3c8e4c6420af15a033898e25cb9ea45157e3935112bbf0aab0670275969",
+      "example_ids": [
+        "foundation-dev-1",
+        "foundation-dev-2",
+        "foundation-dev-3"
+      ],
+      "event_groups": [
+        "fixture-dev-1",
+        "fixture-dev-2",
+        "fixture-dev-3"
+      ],
+      "evidence_fingerprints": [
+        "8fff463b42be72a322292d8caaa4316c7889d8ca1c50ad72fdca2925be8f705a",
+        "4565476216d54e31294c6868bee97387490fb2b706d7b5874e30e05468c0c1d4",
+        "ee9ceae1e53543d18949975e698524a20a760b501bc32e44c9dc570aa710f8ab"
+      ]
+    },
+    "holdout": {
+      "path": "holdout.jsonl",
+      "sha256": "f605b63832873c1ecce66d7e02a3049ef4d116307d0e5ce5e36cc131efc4db43",
+      "example_ids": [
+        "foundation-holdout-1",
+        "foundation-holdout-2",
+        "foundation-holdout-3"
+      ],
+      "event_groups": [
+        "fixture-holdout-1",
+        "fixture-holdout-2",
+        "fixture-holdout-3"
+      ],
+      "evidence_fingerprints": [
+        "9413cd8e2c637ff1226880f95a20bd3066e5fd548cb038ddfc0775c4ddfe4f4f",
+        "439dde2edd0b9ecfc1faef0d74017052251483d0d64dcd76a4d61a8a0b69103c",
+        "f66ea579866b62a27670a39fbe425cf156325e6eb502f1601a5343da4f0ad4b7"
+      ]
+    },
+    "prod_regression": {
+      "path": "prod_regression.jsonl",
+      "sha256": "a6e013197cbcbe3e0622a0b8f35316f510016683eda5d983d7a3694cda6b3cc1",
+      "example_ids": [
+        "foundation-prod_regression-1",
+        "foundation-prod_regression-2",
+        "foundation-prod_regression-3"
+      ],
+      "event_groups": [
+        "fixture-prod_regression-1",
+        "fixture-prod_regression-2",
+        "fixture-prod_regression-3"
+      ],
+      "evidence_fingerprints": [
+        "03fa976ddb9196d2bede718d251f497dfa474ceac4b1c25b8fdd9c66fe80e30c",
+        "0d56a59c1a2ff4678b6f540b52261aec40d543831490dc01715bdcc731de33f9",
+        "8d29272e2029c3939b05b32f3e4650a20e0c2cb4984057c7eb9fc11d3f9ff495"
+      ]
+    }
+  },
+  "required_splits": [
+    "dev",
+    "holdout",
+    "prod_regression"
+  ],
+  "label_taxonomy": [
+    "increment",
+    "invalid_reference",
+    "state_gate",
+    "changed_version",
+    "missing_metadata"
+  ],
+  "rights": {
+    "status": "synthetic_fixture",
+    "provenance": "Original deterministic local fixtures.",
+    "retention": "versioned_local_fixture"
+  },
+  "adjudication": {
+    "status": "fixture_expected",
+    "labeler": "deterministic_fixture_author",
+    "labeled_at": "2026-11-09T00:00:00Z",
+    "rationale": "Fixture evidence only; not real-agent labels.",
+    "confidence": 1.0,
+    "disagreement_history": []
+  },
+  "limitations": [
+    "Synthetic harness evidence only; insufficient sample size for any real agent or editorial quality claim."
+  ]
+}

@@ -1,0 +1,568 @@
+{
+  "models": {
+    "EvidencePin": {
+      "additionalProperties": false,
+      "properties": {
+        "bundle_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Bundle Hash",
+          "type": "string"
+        },
+        "path": {
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "bundle_hash"
+      ],
+      "title": "EvidencePin",
+      "type": "object"
+    },
+    "FeedbackAnnotation": {
+      "additionalProperties": false,
+      "properties": {
+        "adjudication_review": {
+          "default": "PENDING",
+          "enum": [
+            "PENDING",
+            "CLEARED",
+            "REJECTED"
+          ],
+          "title": "Adjudication Review",
+          "type": "string"
+        },
+        "agent_name": {
+          "minLength": 1,
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "annotation_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Annotation Hash",
+          "type": "string"
+        },
+        "annotation_ref": {
+          "minLength": 1,
+          "title": "Annotation Ref",
+          "type": "string"
+        },
+        "dataset_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Dataset Hash",
+          "type": "string"
+        },
+        "privacy_review": {
+          "default": "PENDING",
+          "enum": [
+            "PENDING",
+            "CLEARED",
+            "REJECTED"
+          ],
+          "title": "Privacy Review",
+          "type": "string"
+        },
+        "rights_review": {
+          "default": "PENDING",
+          "enum": [
+            "PENDING",
+            "CLEARED",
+            "REJECTED"
+          ],
+          "title": "Rights Review",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "annotation_ref",
+        "annotation_hash",
+        "agent_name",
+        "dataset_hash"
+      ],
+      "title": "FeedbackAnnotation",
+      "type": "object"
+    },
+    "FeedbackCandidate": {
+      "$defs": {
+        "FeedbackAnnotation": {
+          "additionalProperties": false,
+          "properties": {
+            "adjudication_review": {
+              "default": "PENDING",
+              "enum": [
+                "PENDING",
+                "CLEARED",
+                "REJECTED"
+              ],
+              "title": "Adjudication Review",
+              "type": "string"
+            },
+            "agent_name": {
+              "minLength": 1,
+              "title": "Agent Name",
+              "type": "string"
+            },
+            "annotation_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Annotation Hash",
+              "type": "string"
+            },
+            "annotation_ref": {
+              "minLength": 1,
+              "title": "Annotation Ref",
+              "type": "string"
+            },
+            "dataset_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Dataset Hash",
+              "type": "string"
+            },
+            "privacy_review": {
+              "default": "PENDING",
+              "enum": [
+                "PENDING",
+                "CLEARED",
+                "REJECTED"
+              ],
+              "title": "Privacy Review",
+              "type": "string"
+            },
+            "rights_review": {
+              "default": "PENDING",
+              "enum": [
+                "PENDING",
+                "CLEARED",
+                "REJECTED"
+              ],
+              "title": "Rights Review",
+              "type": "string"
+            },
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "required": [
+            "annotation_ref",
+            "annotation_hash",
+            "agent_name",
+            "dataset_hash"
+          ],
+          "title": "FeedbackAnnotation",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "annotation": {
+          "$ref": "#/$defs/FeedbackAnnotation"
+        },
+        "feedback_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Feedback Id",
+          "type": "string"
+        },
+        "queued_at": {
+          "format": "date-time",
+          "title": "Queued At",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "const": "QUARANTINED",
+          "default": "QUARANTINED",
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "feedback_id",
+        "annotation",
+        "queued_at"
+      ],
+      "title": "FeedbackCandidate",
+      "type": "object"
+    },
+    "GateDecision": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Hash"
+        },
+        "candidate_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Hash",
+          "type": "string"
+        },
+        "current_version": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Current Version",
+          "type": "integer"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "APPROVED",
+            "ELIGIBLE",
+            "REQUIRES_BOOTSTRAP_APPROVAL",
+            "BLOCKED",
+            "ERROR"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "synthetic_only": {
+          "const": true,
+          "default": true,
+          "title": "Synthetic Only",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "candidate_hash",
+        "status"
+      ],
+      "title": "GateDecision",
+      "type": "object"
+    },
+    "ReleaseApproval": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_name": {
+          "const": "foundation",
+          "default": "foundation",
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "approval_id": {
+          "minLength": 1,
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "approved_at": {
+          "format": "date-time",
+          "title": "Approved At",
+          "type": "string"
+        },
+        "baseline_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Baseline Hash"
+        },
+        "bootstrap": {
+          "title": "Bootstrap",
+          "type": "boolean"
+        },
+        "candidate_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Candidate Hash",
+          "type": "string"
+        },
+        "experiment_hashes": {
+          "additionalProperties": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "propertyNames": {
+            "enum": [
+              "dev",
+              "holdout",
+              "prod_regression"
+            ]
+          },
+          "title": "Experiment Hashes",
+          "type": "object"
+        },
+        "policy_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Policy Hash",
+          "type": "string"
+        },
+        "release_pins": {
+          "additionalProperties": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "propertyNames": {
+            "minLength": 1
+          },
+          "title": "Release Pins",
+          "type": "object"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "synthetic_only": {
+          "const": true,
+          "default": true,
+          "title": "Synthetic Only",
+          "type": "boolean"
+        },
+        "version": {
+          "minimum": 1,
+          "title": "Version",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "approval_id",
+        "candidate_hash",
+        "release_pins",
+        "experiment_hashes",
+        "baseline_hash",
+        "policy_hash",
+        "version",
+        "bootstrap",
+        "approved_at"
+      ],
+      "title": "ReleaseApproval",
+      "type": "object"
+    },
+    "ReleaseCandidate": {
+      "$defs": {
+        "EvidencePin": {
+          "additionalProperties": false,
+          "properties": {
+            "bundle_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Bundle Hash",
+              "type": "string"
+            },
+            "path": {
+              "minLength": 1,
+              "title": "Path",
+              "type": "string"
+            }
+          },
+          "required": [
+            "path",
+            "bundle_hash"
+          ],
+          "title": "EvidencePin",
+          "type": "object"
+        },
+        "ReleasePolicy": {
+          "additionalProperties": false,
+          "properties": {
+            "critical_false_accepts": {
+              "const": 0,
+              "default": 0,
+              "title": "Critical False Accepts",
+              "type": "integer"
+            },
+            "dataset_kind": {
+              "const": "synthetic_foundation",
+              "default": "synthetic_foundation",
+              "title": "Dataset Kind",
+              "type": "string"
+            },
+            "deterministic_pass_rate": {
+              "const": 1.0,
+              "default": 1.0,
+              "title": "Deterministic Pass Rate",
+              "type": "number"
+            },
+            "policy_id": {
+              "const": "foundation.release.v1",
+              "default": "foundation.release.v1",
+              "title": "Policy Id",
+              "type": "string"
+            },
+            "required_splits": {
+              "default": [
+                "dev",
+                "holdout",
+                "prod_regression"
+              ],
+              "items": {
+                "enum": [
+                  "dev",
+                  "holdout",
+                  "prod_regression"
+                ],
+                "type": "string"
+              },
+              "title": "Required Splits",
+              "type": "array"
+            },
+            "rubric_pass_rate": {
+              "const": 1.0,
+              "default": 1.0,
+              "title": "Rubric Pass Rate",
+              "type": "number"
+            },
+            "schema_version": {
+              "const": "1.0",
+              "default": "1.0",
+              "title": "Schema Version",
+              "type": "string"
+            }
+          },
+          "title": "ReleasePolicy",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "agent_name": {
+          "const": "foundation",
+          "default": "foundation",
+          "title": "Agent Name",
+          "type": "string"
+        },
+        "evidence": {
+          "additionalProperties": {
+            "$ref": "#/$defs/EvidencePin"
+          },
+          "propertyNames": {
+            "enum": [
+              "dev",
+              "holdout",
+              "prod_regression"
+            ]
+          },
+          "title": "Evidence",
+          "type": "object"
+        },
+        "policy": {
+          "$ref": "#/$defs/ReleasePolicy",
+          "default": {
+            "critical_false_accepts": 0,
+            "dataset_kind": "synthetic_foundation",
+            "deterministic_pass_rate": 1.0,
+            "policy_id": "foundation.release.v1",
+            "required_splits": [
+              "dev",
+              "holdout",
+              "prod_regression"
+            ],
+            "rubric_pass_rate": 1.0,
+            "schema_version": "1.0"
+          }
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence"
+      ],
+      "title": "ReleaseCandidate",
+      "type": "object"
+    },
+    "ReleasePolicy": {
+      "additionalProperties": false,
+      "properties": {
+        "critical_false_accepts": {
+          "const": 0,
+          "default": 0,
+          "title": "Critical False Accepts",
+          "type": "integer"
+        },
+        "dataset_kind": {
+          "const": "synthetic_foundation",
+          "default": "synthetic_foundation",
+          "title": "Dataset Kind",
+          "type": "string"
+        },
+        "deterministic_pass_rate": {
+          "const": 1.0,
+          "default": 1.0,
+          "title": "Deterministic Pass Rate",
+          "type": "number"
+        },
+        "policy_id": {
+          "const": "foundation.release.v1",
+          "default": "foundation.release.v1",
+          "title": "Policy Id",
+          "type": "string"
+        },
+        "required_splits": {
+          "default": [
+            "dev",
+            "holdout",
+            "prod_regression"
+          ],
+          "items": {
+            "enum": [
+              "dev",
+              "holdout",
+              "prod_regression"
+            ],
+            "type": "string"
+          },
+          "title": "Required Splits",
+          "type": "array"
+        },
+        "rubric_pass_rate": {
+          "const": 1.0,
+          "default": 1.0,
+          "title": "Rubric Pass Rate",
+          "type": "number"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "title": "ReleasePolicy",
+      "type": "object"
+    }
+  },
+  "schema_version": "1.0"
+}

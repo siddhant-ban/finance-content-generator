@@ -1,0 +1,17 @@
+{
+  "schema_version": "1.0",
+  "source_id": "00000000-0000-0000-0000-00000000000a",
+  "revision": 1,
+  "original_url": "https://example.invalid/release",
+  "canonical_url": "https://example.invalid/release",
+  "publisher": "Synthetic fixture",
+  "source_class": "primary",
+  "published_at": null,
+  "publication_time_reason": "not supplied",
+  "retrieved_at": "2026-11-10T00:00:00Z",
+  "locator": "contradictory table",
+  "excerpt": null,
+  "rights": "metadata_only",
+  "usage_notes": "Synthetic metadata fixture",
+  "content_hash": null
+}

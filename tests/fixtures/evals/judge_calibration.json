@@ -1,0 +1,147 @@
+{
+  "anchors": [
+    {
+      "observed_matches_expected": true,
+      "output": {
+        "agent_name": "foundation",
+        "agent_version": "1.0",
+        "config_hash": "44363fff128ecccebb9bbf09be80f809c6d2d0aab77ea95ff27cba40a2698582",
+        "config_version": "1.1",
+        "created_at": "2026-11-10T17:57:02.358086Z",
+        "error": null,
+        "evidence_refs": [],
+        "invocation_id": "f8b76879-1fbc-41b4-8f92-0ffdd0add6c2",
+        "observability_status": "DEGRADED",
+        "output": {
+          "value": 2
+        },
+        "output_ref": {
+          "media_type": "application/json",
+          "schema_version": "1.0",
+          "sha256": "49c987621f206f09e5fbe23b516b55a36f838cb14867961f1d84a554d3a35b6b",
+          "size_bytes": 11
+        },
+        "prompt_hash": "6289da46c5625ee26a407df55f5fb32b5dcdfe86b95d6e4fae8fb2e30d6f22fb",
+        "prompt_id": "foundation",
+        "prompt_version": "foundation.v1",
+        "run_id": "c65638fe-dea1-483e-9671-dd66809f45fc",
+        "schema_version": "1.0",
+        "span_id": "e18ebfc128f610cb",
+        "status": "OK",
+        "story_id": "4bc7d46f-29ba-464d-a714-0d4513b481a6",
+        "trace_id": "b8bfc42985ed3a65ae89320d354b2f65",
+        "usage": {
+          "availability_reason": "not_reported",
+          "estimated_cost": null,
+          "input_tokens": null,
+          "measured_cost": null,
+          "output_tokens": null
+        },
+        "warnings": []
+      },
+      "score": 1.0
+    },
+    {
+      "observed_matches_expected": false,
+      "output": {
+        "agent_name": "foundation",
+        "agent_version": "1.0",
+        "config_hash": "44363fff128ecccebb9bbf09be80f809c6d2d0aab77ea95ff27cba40a2698582",
+        "config_version": "1.1",
+        "created_at": "2026-11-10T17:57:02.358086Z",
+        "error": null,
+        "evidence_refs": [],
+        "invocation_id": "f8b76879-1fbc-41b4-8f92-0ffdd0add6c2",
+        "observability_status": "DEGRADED",
+        "output": {
+          "value": 999
+        },
+        "output_ref": {
+          "media_type": "application/json",
+          "schema_version": "1.0",
+          "sha256": "7c52f1f981be20d34af42c315854caffc08dc842f973f35f2416beb957072729",
+          "size_bytes": 13
+        },
+        "prompt_hash": "6289da46c5625ee26a407df55f5fb32b5dcdfe86b95d6e4fae8fb2e30d6f22fb",
+        "prompt_id": "foundation",
+        "prompt_version": "foundation.v1",
+        "run_id": "c65638fe-dea1-483e-9671-dd66809f45fc",
+        "schema_version": "1.0",
+        "span_id": "e18ebfc128f610cb",
+        "status": "OK",
+        "story_id": "4bc7d46f-29ba-464d-a714-0d4513b481a6",
+        "trace_id": "b8bfc42985ed3a65ae89320d354b2f65",
+        "usage": {
+          "availability_reason": "not_reported",
+          "estimated_cost": null,
+          "input_tokens": null,
+          "measured_cost": null,
+          "output_tokens": null
+        },
+        "warnings": []
+      },
+      "score": 0.0
+    }
+  ],
+  "calibration_id": "harness-only-v1",
+  "example": {
+    "adjudication": {
+      "confidence": 1.0,
+      "disagreement_history": [],
+      "labeled_at": "2026-11-09T00:00:00Z",
+      "labeler": "deterministic_fixture_author",
+      "rationale": "Harness policy expectation, not editorial truth.",
+      "status": "fixture_expected"
+    },
+    "agent_name": "foundation",
+    "agent_version": "1.0.0",
+    "dataset_version": "1.0.0",
+    "event_group": "fixture-dev-1",
+    "evidence_fingerprints": [
+      "8fff463b42be72a322292d8caaa4316c7889d8ca1c50ad72fdca2925be8f705a"
+    ],
+    "example_id": "foundation-dev-1",
+    "input": {
+      "artifact_version": "1.0.0",
+      "data": {
+        "value": 1
+      },
+      "metadata_present": true,
+      "reference_ids": [
+        "fixture-source-1"
+      ],
+      "scenario": "increment",
+      "state": "AWAITING_APPROVAL"
+    },
+    "labels": {
+      "critical_trap": false,
+      "target_behavior": "increment"
+    },
+    "reference": {
+      "outcome": "accept",
+      "output": {
+        "value": 2
+      },
+      "rejection_code": null
+    },
+    "reference_ids": [],
+    "rights": {
+      "provenance": "Original deterministic local fixture; no real source content.",
+      "retention": "versioned_local_fixture",
+      "status": "synthetic_fixture"
+    },
+    "schema_version": "1.0",
+    "severity": "low",
+    "source_refs": [
+      "fixture-source-1"
+    ],
+    "split": "dev"
+  },
+  "judge": "synthetic_fixture_judge",
+  "judge_version": "1.0",
+  "limitations": "Harness plumbing only; no human calibration or editorial quality claim.",
+  "prompt": "synthetic_expected_behavior",
+  "prompt_version": "1.0",
+  "schema_version": "1.0",
+  "synthetic_only": true
+}

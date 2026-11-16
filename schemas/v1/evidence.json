@@ -1,0 +1,663 @@
+{
+  "models": {
+    "ClaimRevision": {
+      "$defs": {
+        "EvidenceRef": {
+          "additionalProperties": false,
+          "properties": {
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "source_record_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Source Record Hash",
+              "type": "string"
+            },
+            "source_revision": {
+              "minimum": 1,
+              "title": "Source Revision",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "source_id",
+            "source_revision",
+            "source_record_hash"
+          ],
+          "title": "EvidenceRef",
+          "type": "object"
+        },
+        "NumericObservation": {
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "enum": [
+                "nominal",
+                "real",
+                "not_applicable",
+                "unknown"
+              ],
+              "title": "Basis",
+              "type": "string"
+            },
+            "classification": {
+              "enum": [
+                "actual",
+                "forecast",
+                "scenario",
+                "unknown"
+              ],
+              "title": "Classification",
+              "type": "string"
+            },
+            "comparison_baseline": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Comparison Baseline"
+            },
+            "currency": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Currency"
+            },
+            "geography": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Geography"
+            },
+            "period": {
+              "anyOf": [
+                {
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Period"
+            },
+            "revision_status": {
+              "enum": [
+                "provisional",
+                "revised",
+                "final",
+                "unknown"
+              ],
+              "title": "Revision Status",
+              "type": "string"
+            },
+            "seasonal_adjustment": {
+              "enum": [
+                "adjusted",
+                "unadjusted",
+                "unknown"
+              ],
+              "title": "Seasonal Adjustment",
+              "type": "string"
+            },
+            "unit": {
+              "enum": [
+                "number",
+                "currency",
+                "percent",
+                "percentage_points",
+                "count"
+              ],
+              "title": "Unit",
+              "type": "string"
+            },
+            "value": {
+              "title": "Value",
+              "type": "string"
+            },
+            "vintage": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Vintage"
+            }
+          },
+          "required": [
+            "value",
+            "unit",
+            "currency",
+            "period",
+            "geography",
+            "seasonal_adjustment",
+            "basis",
+            "revision_status",
+            "vintage",
+            "classification",
+            "comparison_baseline"
+          ],
+          "title": "NumericObservation",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "caveats": {
+          "default": [],
+          "items": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "title": "Caveats",
+          "type": "array"
+        },
+        "claim_id": {
+          "format": "uuid",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_type": {
+          "enum": [
+            "fact",
+            "interpretation",
+            "scenario",
+            "uncertainty"
+          ],
+          "title": "Claim Type",
+          "type": "string"
+        },
+        "evidence_refs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "materiality": {
+          "enum": [
+            "material",
+            "minor"
+          ],
+          "title": "Materiality",
+          "type": "string"
+        },
+        "numeric_observations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/NumericObservation"
+          },
+          "title": "Numeric Observations",
+          "type": "array"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "revision",
+        "text",
+        "claim_type",
+        "materiality"
+      ],
+      "title": "ClaimRevision",
+      "type": "object"
+    },
+    "ClaimUse": {
+      "additionalProperties": false,
+      "properties": {
+        "claim_id": {
+          "format": "uuid",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_revision": {
+          "minimum": 1,
+          "title": "Claim Revision",
+          "type": "integer"
+        },
+        "text": {
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim_revision",
+        "text"
+      ],
+      "title": "ClaimUse",
+      "type": "object"
+    },
+    "EvidenceRef": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_record_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Record Hash",
+          "type": "string"
+        },
+        "source_revision": {
+          "minimum": 1,
+          "title": "Source Revision",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "source_revision",
+        "source_record_hash"
+      ],
+      "title": "EvidenceRef",
+      "type": "object"
+    },
+    "NumericObservation": {
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "enum": [
+            "nominal",
+            "real",
+            "not_applicable",
+            "unknown"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "classification": {
+          "enum": [
+            "actual",
+            "forecast",
+            "scenario",
+            "unknown"
+          ],
+          "title": "Classification",
+          "type": "string"
+        },
+        "comparison_baseline": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Comparison Baseline"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Z]{3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Currency"
+        },
+        "geography": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Geography"
+        },
+        "period": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Period"
+        },
+        "revision_status": {
+          "enum": [
+            "provisional",
+            "revised",
+            "final",
+            "unknown"
+          ],
+          "title": "Revision Status",
+          "type": "string"
+        },
+        "seasonal_adjustment": {
+          "enum": [
+            "adjusted",
+            "unadjusted",
+            "unknown"
+          ],
+          "title": "Seasonal Adjustment",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "number",
+            "currency",
+            "percent",
+            "percentage_points",
+            "count"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "title": "Value",
+          "type": "string"
+        },
+        "vintage": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vintage"
+        }
+      },
+      "required": [
+        "value",
+        "unit",
+        "currency",
+        "period",
+        "geography",
+        "seasonal_adjustment",
+        "basis",
+        "revision_status",
+        "vintage",
+        "classification",
+        "comparison_baseline"
+      ],
+      "title": "NumericObservation",
+      "type": "object"
+    },
+    "SourceRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_url": {
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "content_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Content Hash"
+        },
+        "excerpt": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Excerpt"
+        },
+        "locator": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Locator"
+        },
+        "original_url": {
+          "title": "Original Url",
+          "type": "string"
+        },
+        "publication_time_reason": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Publication Time Reason"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At"
+        },
+        "publisher": {
+          "minLength": 1,
+          "title": "Publisher",
+          "type": "string"
+        },
+        "retrieved_at": {
+          "format": "date-time",
+          "title": "Retrieved At",
+          "type": "string"
+        },
+        "revision": {
+          "minimum": 1,
+          "title": "Revision",
+          "type": "integer"
+        },
+        "rights": {
+          "enum": [
+            "unknown",
+            "metadata_only",
+            "excerpt_permitted"
+          ],
+          "title": "Rights",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source_class": {
+          "enum": [
+            "primary",
+            "reputable_secondary",
+            "commentary",
+            "unknown"
+          ],
+          "title": "Source Class",
+          "type": "string"
+        },
+        "source_id": {
+          "format": "uuid",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "usage_notes": {
+          "minLength": 1,
+          "title": "Usage Notes",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "revision",
+        "original_url",
+        "canonical_url",
+        "publisher",
+        "source_class",
+        "published_at",
+        "publication_time_reason",
+        "retrieved_at",
+        "rights",
+        "usage_notes"
+      ],
+      "title": "SourceRecord",
+      "type": "object"
+    },
+    "VerificationRecord": {
+      "$defs": {
+        "EvidenceRef": {
+          "additionalProperties": false,
+          "properties": {
+            "source_id": {
+              "format": "uuid",
+              "title": "Source Id",
+              "type": "string"
+            },
+            "source_record_hash": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Source Record Hash",
+              "type": "string"
+            },
+            "source_revision": {
+              "minimum": 1,
+              "title": "Source Revision",
+              "type": "integer"
+            }
+          },
+          "required": [
+            "source_id",
+            "source_revision",
+            "source_record_hash"
+          ],
+          "title": "EvidenceRef",
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "properties": {
+        "caveat": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caveat"
+        },
+        "claim_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Claim Hash",
+          "type": "string"
+        },
+        "claim_id": {
+          "format": "uuid",
+          "title": "Claim Id",
+          "type": "string"
+        },
+        "claim_revision": {
+          "minimum": 1,
+          "title": "Claim Revision",
+          "type": "integer"
+        },
+        "evidence_refs": {
+          "items": {
+            "$ref": "#/$defs/EvidenceRef"
+          },
+          "title": "Evidence Refs",
+          "type": "array"
+        },
+        "status": {
+          "enum": [
+            "VERIFIED",
+            "VERIFIED_WITH_CAVEAT",
+            "NEEDS_REVISION",
+            "REJECTED"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "claim_id",
+        "claim_revision",
+        "claim_hash",
+        "status",
+        "evidence_refs"
+      ],
+      "title": "VerificationRecord",
+      "type": "object"
+    }
+  },
+  "schema_version": "1.0"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": "1.0",
+  "kind": "illustrative",
+  "dataset_version": "0.1.0",
+  "files": {
+    "dev": {
+      "path": "starter_examples.jsonl",
+      "sha256": "f7ba937d1d1f213d674ad7885cc5298c6163edaf86d27edf5520ec796c93c8e6"
+    }
+  },
+  "adjudication": {
+    "status": "illustrative_not_adjudicated"
+  },
+  "rights": {
+    "status": "unreviewed"
+  },
+  "promotable": false,
+  "limitations": [
+    "Illustrative only; unadjudicated labels and unresolved ns-002 reference.",
+    "No holdout or prod_regression splits; not gate-valid.",
+    "No registered real-agent payload schemas or verified source rights."
+  ]
+}

@@ -1,0 +1,1 @@
+{"schema_version":"1.0","policy_id":"foundation.v1","agent_name":"foundation","synthetic_only":true,"required_evaluators":["contract","policy","evidence","state","metadata","fake_rubric"],"required_splits":["dev","holdout","prod_regression"],"contract_pass_rate":1.0,"policy_pass_rate":1.0,"critical_false_accepts":0,"rubric_pass_rate":1.0}

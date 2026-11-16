@@ -1,0 +1,1 @@
+"""Strict, versioned public contracts."""

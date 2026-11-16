@@ -1,0 +1,39 @@
+name: Foundation offline acceptance
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_NO_PROGRESS: '1'
+      FINANCE_DATA_DIR: data/ci-maintenance-empty
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: '0.13.4'
+          python-version: '3.12.15'
+          enable-cache: false
+      - name: Install locked dependencies
+        run: uv sync --locked
+      - name: Verify locked runtime
+        run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
+      - name: Offline tests
+        run: uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
+      - name: Synthetic acceptance and local evidence
+        run: uv run --offline python -m app.demo --offline --output data/foundation-demo
+      - name: Retention dry run on fresh absent root
+        run: uv run --offline python -m app.maintenance --dry-run
+      - name: Upload sanitized aggregate report only
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: synthetic-foundation-public-report
+          path: data/foundation-demo/public-report.json
+          if-no-files-found: error
+          retention-days: 7
