@@ -421,3 +421,33 @@ Compare by mutant ID. Require the same nonempty set of IDs in both runs and
 keep every baseline kill. Resolve timeout, skipped, and tool error results
 before accepting a comparison. Run the offline tests with the 90% coverage
 gate and keep direct checks for approval, release, and distinct failure modes.
+
+### Ubuntu benchmark on November 19, 2026
+
+Five baseline jobs on Ubuntu image `20261111.196` took 87, 90, 93, 103,
+and 115 seconds from job start to completion. Five candidate jobs at
+`4ae502e` took 29, 30, 33, 34, and 35 seconds across builds of Ubuntu
+26.04. The candidate runs used the push trigger and the same job steps
+configured for pull requests. Dependency caching was disabled in both
+variants. Queue time was measured separately.
+
+The median dropped from 93 to 33 seconds, a 64.5% reduction against an
+80% target. The candidate's median pytest step was 21 seconds, and its
+median time outside pytest was 12 seconds. The target was 18.6 seconds
+for the entire job.
+
+The required suite dropped from 754 to 572 collected offline cases by
+grouping 196 transition pairs into 14 source-state cases. Each pair is
+still checked. Line coverage was 92.666818% in every candidate run.
+The transition tests caught the same 30 of 31 mutants before and after
+grouping. A separate release-test consolidation was discarded after
+three baseline mutants survived.
+
+All five candidate jobs passed synthetic acceptance and the retention dry run.
+The public report verified the offline evaluation evidence for dev, holdout,
+and production regression. Each split passed with zero critical false
+accepts. The uploaded archive contained only `public-report.json`.
+
+[Baseline job](https://github.com/siddhant-ban/finance-content-generator/actions/runs/43900367063/job/133414990128)
+· [Candidate job](https://github.com/siddhant-ban/finance-content-generator/actions/runs/44617265143/job/135889197341)
+· [Transition mutation comparison](https://github.com/siddhant-ban/finance-content-generator/actions/runs/44615933741)
