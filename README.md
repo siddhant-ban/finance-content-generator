@@ -36,7 +36,8 @@ From the repository root, with Python from `.python-version` and uv 0.13.4:
 
 ```sh
 uv sync --locked
-uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
+uv run --offline coverage run -m pytest tests/unit tests/integration -m 'not phoenix_live' -q
+uv run --offline coverage report
 uv run --offline python -m app.demo --offline --output data/foundation-demo
 ```
 
@@ -51,5 +52,5 @@ See [the runbook](docs/foundations-runbook.md) for review embedding, offline
 operation and retention. Phoenix is optional; default acceptance does not start
 Docker or call external feeds/models. The existing optional live Phoenix probe
 and real OAuth browser checks are separate evidence requirements. CI installs
-locked dependencies, runs offline acceptance and uploads only the public report.
+locked dependencies, requires at least 90% line coverage across `app/`, and runs offline acceptance. It uploads only the public report.
 No remote CI execution or deployment is implied by the checked-in workflow.

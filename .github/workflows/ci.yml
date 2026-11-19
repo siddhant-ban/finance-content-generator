@@ -25,7 +25,10 @@ jobs:
       - name: Verify locked runtime
         run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
       - name: Offline tests
-        run: uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
+        shell: bash
+        run: |
+          uv run --offline coverage run -m pytest tests/unit tests/integration -m 'not phoenix_live' -q
+          uv run --offline coverage report
       - name: Synthetic acceptance and local evidence
         run: uv run --offline python -m app.demo --offline --output data/foundation-demo
       - name: Retention dry run on fresh absent root
