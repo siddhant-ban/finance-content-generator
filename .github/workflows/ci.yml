@@ -25,7 +25,46 @@ jobs:
       - name: Verify locked runtime
         run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
       - name: Offline tests
-        run: uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
+        shell: bash
+        run: |
+          cat > tests/test_ci_release_evidence_probe.py <<'PY'
+          import pytest
+          from tests.release_fixtures import evidence
+
+          observed = {}
+
+          @pytest.mark.parametrize("case", ["mutate", "reopen"])
+          def test_shared_evidence_is_reused_without_sharing_mutable_rows(evidence, case):
+              dev = evidence["dev"]
+              if case == "mutate":
+                  observed["hash"] = dev.record_hash()
+                  dev.provenance["fixture_probe"] = "changed by one test"
+                  evidence.pop("holdout")
+              else:
+                  assert observed["hash"] == dev.record_hash()
+                  assert "fixture_probe" not in dev.provenance
+                  assert "holdout" in evidence
+          PY
+          if uv run --offline --no-sync pytest tests/test_ci_release_evidence_probe.py -q; then
+            echo 'The fixture unexpectedly satisfied the reuse check before optimization'
+            exit 1
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          p = Path("tests/release_fixtures.py")
+          content = p.read_text().replace(
+              "@pytest.fixture\ndef evidence(tmp_path):\n    runner = create_runner(tmp_path/'runtime')",
+              "@pytest.fixture(scope='session')\ndef release_evidence_snapshot(tmp_path_factory):\n    runner = create_runner(tmp_path_factory.mktemp('release-evidence'))",
+          )
+          content = content.replace(
+              "    runner.store.conn.close()\n    return bundles",
+              "    runner.telemetry.shutdown(0)\n    runner.store.conn.close()\n    return bundles\n\n\n@pytest.fixture\ndef evidence(release_evidence_snapshot):\n    return {split: bundle.model_copy(deep=True) for split, bundle in release_evidence_snapshot.items()}",
+          )
+          p.write_text(content)
+          PY
+          uv run --offline --no-sync pytest tests/test_ci_release_evidence_probe.py -q
+          uv pip install coverage==7.10.7 pytest-cov==7.0.0 pytest-xdist==3.8.0
+          time uv run --offline --no-sync pytest tests/unit tests/integration -m 'not phoenix_live' -q --basetemp "$(mktemp -d /dev/shm/finance-pytest.XXXXXX)" -n 4 --cov=app --cov-report=term --cov-fail-under=90 --durations=15
       - name: Synthetic acceptance and local evidence
         run: uv run --offline python -m app.demo --offline --output data/foundation-demo
       - name: Retention dry run on fresh absent root
