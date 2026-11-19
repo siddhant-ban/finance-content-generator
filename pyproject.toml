@@ -22,3 +22,10 @@ branch = false
 fail_under = 90
 precision = 6
 show_missing = true
+
+[tool.mutmut]
+source_paths = ["app"]
+only_mutate = ["app/workflow/state.py", "app/release/service.py"]
+also_copy = ["tests", "pyproject.toml", "evals", "prompts", "schemas", ".python-version"]
+pytest_add_cli_args_test_selection = ["tests/unit", "tests/integration"]
+pytest_add_cli_args = ["-m", "not phoenix_live"]

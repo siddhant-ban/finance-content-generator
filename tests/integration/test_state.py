@@ -29,9 +29,10 @@ ALLOWED_TARGETS = {
 }
 
 @pytest.mark.parametrize('source',list(StoryState))
-@pytest.mark.parametrize('target',list(StoryState))
-def test_all_state_pairs_against_matrix(source,target):
-    assert allowed_edge(source,target)==(target.value in ALLOWED_TARGETS[source.value])
+def test_all_state_pairs_against_matrix(source):
+    actual = {target.value: allowed_edge(source, target) for target in StoryState}
+    expected = {target.value: target.value in ALLOWED_TARGETS[source.value] for target in StoryState}
+    assert actual == expected
 
 def test_agent_cannot_approve_or_publish(tmp_path):
     _,store,_,svc=setup(tmp_path); snap,m=awaiting(svc,store)

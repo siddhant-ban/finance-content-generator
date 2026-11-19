@@ -394,3 +394,30 @@ all telemetry snapshots and pending rows remain protected. Complete offline eval
 exports include immutable dataset copies and also remain protected in this slice.
 No real scratch files should be removed to verify retention; tests execute solely
 against temporary fixtures.
+
+## Mutation checks for CI test reduction
+
+Use clean Linux worktrees at the same application revision with the original
+and candidate tests. In each worktree, start without a `mutants/` directory.
+The dependency installation below is isolated to the worktree and the normal CI
+job does not install mutmut.
+
+```bash
+uv sync --locked
+uv pip install mutmut==3.8.1
+uv run --offline --no-sync mutmut run --max-children 4 \
+  'app.workflow.state.x_allowed_edge__mutmut_*'
+uv run --offline --no-sync mutmut results --all true \
+  | grep 'x_allowed_edge__mutmut_' > transition-mutations.txt
+```
+
+For release checks, use the patterns
+`app.release.service.xǁReleaseServiceǁcheck__mutmut_*`,
+`app.release.service.xǁReleaseServiceǁactive__mutmut_*`, and
+`app.release.service.xǁReleaseServiceǁrequire_approved__mutmut_*` in the same
+invocation and filter the result listing to those three names.
+
+Compare by mutant ID. Require the same nonempty set of IDs in both runs and
+keep every baseline kill. Resolve timeout, skipped, and tool error results
+before accepting a comparison. Run the offline tests with the 90% coverage
+gate and keep direct checks for approval, release, and distinct failure modes.

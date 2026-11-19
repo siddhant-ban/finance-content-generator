@@ -52,5 +52,7 @@ See [the runbook](docs/foundations-runbook.md) for review embedding, offline
 operation and retention. Phoenix is optional; default acceptance does not start
 Docker or call external feeds/models. The existing optional live Phoenix probe
 and real OAuth browser checks are separate evidence requirements. CI installs
-locked dependencies, requires at least 90% line coverage across `app/`, and runs offline acceptance. It uploads only the public report.
+locked dependencies and combines line coverage from four pytest workers. It
+requires at least 90% line coverage across `app/` and runs offline acceptance.
+It uploads only the public report.
 No remote CI execution or deployment is implied by the checked-in workflow.
