@@ -13,15 +13,38 @@ AGENT = Principal(provider='local', account_id=8, kind='agent')
 def trusted(principal):
     return principal == HUMAN
 
+_RELEASE_EVIDENCE = pytest.StashKey()
+
+
+def _build_release_evidence(root):
+    runner = create_runner(root)
+    try:
+        return {
+            split: run_experiment(
+                ExperimentConfig(repeats=2),
+                load_dataset(Path('evals/foundation/1.0.0'), split, 'gate'),
+                runner,
+                foundation_evaluators(),
+            )
+            for split in ('dev', 'holdout', 'prod_regression')
+        }
+    finally:
+        runner.telemetry.shutdown(0)
+        runner.store.conn.close()
+
+
 @pytest.fixture
-def evidence(tmp_path):
-    runner = create_runner(tmp_path/'runtime')
-    bundles = {}
-    for split in ('dev', 'holdout', 'prod_regression'):
-        bundles[split] = run_experiment(ExperimentConfig(repeats=2),
-            load_dataset(Path('evals/foundation/1.0.0'),split,'gate'),runner,foundation_evaluators())
-    runner.store.conn.close()
-    return bundles
+def evidence(pytestconfig, tmp_path_factory):
+    # Keep generated evidence per worker and mutable bundle data per test.
+    if _RELEASE_EVIDENCE not in pytestconfig.stash:
+        pytestconfig.stash[_RELEASE_EVIDENCE] = _build_release_evidence(
+            tmp_path_factory.mktemp('release-evidence'),
+        )
+    return {
+        split: bundle.model_copy(deep=True)
+        for split, bundle in pytestconfig.stash[_RELEASE_EVIDENCE].items()
+    }
+
 
 def candidate_for(bundles, root):
     from app.release.models import ReleaseCandidate, EvidencePin

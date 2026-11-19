@@ -6,7 +6,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = ["streamlit==1.67.0", "pydantic>=2.12,<3", "arize-phoenix-client==3.7.0", "httpx==0.28.1", "fastapi==0.162.4", "uvicorn==0.54.0", "authlib==1.9.5", "opentelemetry-sdk==1.45.2", "opentelemetry-exporter-otlp-proto-http==1.45.2"]
 
 [dependency-groups]
-dev = ["pytest>=8,<10", "httpx2==2.16.0", "coverage==7.10.7"]
+dev = ["pytest>=8,<10", "httpx2==2.16.0", "coverage==7.10.7", "pytest-cov==7.0.0", "pytest-xdist==3.8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
