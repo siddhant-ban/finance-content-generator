@@ -29,6 +29,38 @@ jobs:
         run: |
           uv run --offline coverage run -m pytest tests/unit tests/integration -m 'not phoenix_live' -q
           uv run --offline coverage report
+      - name: Verify below-threshold coverage is rejected
+        shell: bash
+        run: |
+          seq 1 2000 | sed 's/.*/marker_& = 0/' > app/ci_coverage_probe.py
+          trap 'rm -f app/ci_coverage_probe.py' EXIT
+          export COVERAGE_FILE="$RUNNER_TEMP/finance-coverage-probe"
+          uv run --offline coverage run -m pytest tests/unit/test_config.py -q
+          result=0
+          uv run --offline coverage report > "$RUNNER_TEMP/finance-probe.txt" || result=$?
+          grep -E 'app/ci_coverage_probe.py|TOTAL|Coverage failure' "$RUNNER_TEMP/finance-probe.txt"
+          grep -E 'app/ci_coverage_probe.py +2000 +2000 +0\.000000%' "$RUNNER_TEMP/finance-probe.txt"
+          test "$result" = 2
+          uv run --offline python - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from coverage import CoverageData
+
+          path = Path("app/ci_coverage_probe.py").resolve()
+          path.write_text("probe = 0\n" * 1000)
+          for covered, expected in ((899, 2), (900, 0)):
+              data = CoverageData(basename=os.environ["COVERAGE_FILE"])
+              data.erase()
+              data.add_lines({str(path): set(range(1, covered + 1))})
+              data.write()
+              result = subprocess.run(
+                  [sys.executable, "-m", "coverage", "report", "--include=*/ci_coverage_probe.py"],
+                  check=False,
+              )
+              assert result.returncode == expected, (covered, result.returncode)
+          PY
       - name: Synthetic acceptance and local evidence
         run: uv run --offline python -m app.demo --offline --output data/foundation-demo
       - name: Retention dry run on fresh absent root
