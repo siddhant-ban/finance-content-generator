@@ -52,14 +52,16 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           p = Path("tests/release_fixtures.py")
-          content = p.read_text().replace(
+          original = p.read_text()
+          content = original.replace(
               "@pytest.fixture\ndef evidence(tmp_path):\n    runner = create_runner(tmp_path/'runtime')",
-              "@pytest.fixture(scope='session')\ndef release_evidence_snapshot(tmp_path_factory):\n    runner = create_runner(tmp_path_factory.mktemp('release-evidence'))",
+              "def _build_release_evidence(root):\n    runner = create_runner(root)",
           )
           content = content.replace(
               "    runner.store.conn.close()\n    return bundles",
-              "    runner.telemetry.shutdown(0)\n    runner.store.conn.close()\n    return bundles\n\n\n@pytest.fixture\ndef evidence(release_evidence_snapshot):\n    return {split: bundle.model_copy(deep=True) for split, bundle in release_evidence_snapshot.items()}",
+              "    runner.telemetry.shutdown(0)\n    runner.store.conn.close()\n    return bundles\n\n\n_RELEASE_EVIDENCE = pytest.StashKey()\n\n\n@pytest.fixture\ndef evidence(pytestconfig, tmp_path_factory):\n    if _RELEASE_EVIDENCE not in pytestconfig.stash:\n        pytestconfig.stash[_RELEASE_EVIDENCE] = _build_release_evidence(tmp_path_factory.mktemp('release-evidence'))\n    return {split: bundle.model_copy(deep=True) for split, bundle in pytestconfig.stash[_RELEASE_EVIDENCE].items()}",
           )
+          assert content != original
           p.write_text(content)
           PY
           uv run --offline --no-sync pytest tests/test_ci_release_evidence_probe.py -q
