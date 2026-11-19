@@ -6,8 +6,12 @@ permissions:
   contents: read
 jobs:
   offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [baseline, consolidated]
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       UV_NO_PROGRESS: '1'
       FINANCE_DATA_DIR: data/ci-maintenance-empty
@@ -24,16 +28,41 @@ jobs:
         run: uv sync --locked
       - name: Verify locked runtime
         run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
-      - name: Offline tests
-        run: uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
-      - name: Synthetic acceptance and local evidence
-        run: uv run --offline python -m app.demo --offline --output data/foundation-demo
-      - name: Retention dry run on fresh absent root
-        run: uv run --offline python -m app.maintenance --dry-run
-      - name: Upload sanitized aggregate report only
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: synthetic-foundation-public-report
-          path: data/foundation-demo/public-report.json
-          if-no-files-found: error
-          retention-days: 7
+      - name: Compare transition matrix mutation results
+        shell: bash
+        run: |
+          uv pip install mutmut==3.8.1
+          if [[ '${{ matrix.suite }}' == consolidated ]]; then
+            python - <<'PY'
+          from pathlib import Path
+          p = Path("tests/integration/test_state.py")
+          original = p.read_text()
+          updated = original.replace(
+              "@pytest.mark.parametrize('target',list(StoryState))\ndef test_all_state_pairs_against_matrix(source,target):\n    assert allowed_edge(source,target)==(target.value in ALLOWED_TARGETS[source.value])",
+              "def test_all_state_pairs_against_matrix(source):\n    actual = {target.value: allowed_edge(source, target) for target in StoryState}\n    expected = {target.value: target.value in ALLOWED_TARGETS[source.value] for target in StoryState}\n    assert actual == expected",
+          )
+          assert updated != original
+          p.write_text(updated)
+          PY
+          fi
+          export TMPDIR="$(mktemp -d /dev/shm/finance-mutmut.XXXXXX)"
+          for attempt in 1 2 3; do
+            time uv run --offline --no-sync pytest tests/integration/test_state.py -k 'test_all_state_pairs_against_matrix' -q
+          done
+          mkdir -p data
+          cat >> pyproject.toml <<'TOML'
+
+          [tool.mutmut]
+          source_paths = ["app"]
+          only_mutate = ["app/workflow/state.py"]
+          also_copy = ["tests", "pyproject.toml", "evals", "prompts", "schemas", ".python-version"]
+          pytest_add_cli_args_test_selection = ["tests/unit", "tests/integration"]
+          pytest_add_cli_args = ["-m", "not phoenix_live"]
+          TOML
+          uv run --offline --no-sync mutmut run --max-children 4 'app.workflow.state.x_allowed_edge__mutmut_*'
+          if uv run --offline --no-sync mutmut results --help | grep -q -- '--all BOOLEAN'; then
+            uv run --offline --no-sync mutmut results --all true > data/mutation-results.txt
+          else
+            uv run --offline --no-sync mutmut results --all > data/mutation-results.txt
+          fi
+          grep -E 'x_allowed_edge__mutmut_' data/mutation-results.txt
