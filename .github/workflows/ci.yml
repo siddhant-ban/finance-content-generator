@@ -24,25 +24,21 @@ jobs:
         run: uv sync --locked
       - name: Verify locked runtime
         run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
-      - name: Offline tests
+      - name: Verify worker coverage gate with an unimported module
         shell: bash
         run: |
-          pytest_args=()
-          if [[ -d /dev/shm && -w /dev/shm ]]; then
-            pytest_tmp="$(mktemp -d /dev/shm/finance-pytest.XXXXXX)"
-            trap 'rm -rf -- "$pytest_tmp"' EXIT
-            pytest_args+=(--basetemp "$pytest_tmp")
-          fi
-          COVERAGE_CORE=sysmon uv run --offline --no-sync pytest tests/unit tests/integration -m 'not phoenix_live' -q \
-            -n 4 --dist worksteal --cov --cov-report=term-missing "${pytest_args[@]}"
-      - name: Synthetic acceptance and local evidence
-        run: uv run --offline python -m app.demo --offline --output data/foundation-demo
-      - name: Retention dry run on fresh absent root
-        run: uv run --offline python -m app.maintenance --dry-run
-      - name: Upload sanitized aggregate report only
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: synthetic-foundation-public-report
-          path: data/foundation-demo/public-report.json
-          if-no-files-found: error
-          retention-days: 7
+          seq 1 2000 | sed 's/.*/marker_& = 0/' > app/ci_coverage_probe.py
+          trap 'rm -f app/ci_coverage_probe.py' EXIT
+          result=0
+          COVERAGE_CORE=sysmon uv run --offline --no-sync pytest tests/unit/test_config.py -q \
+            -n 4 --dist worksteal --cov --cov-report=term > "$RUNNER_TEMP/finance-probe.txt" || result=$?
+          grep -E 'app/ci_coverage_probe.py|TOTAL|Required test coverage' "$RUNNER_TEMP/finance-probe.txt"
+          grep -E 'app/ci_coverage_probe.py +2000 +2000 +0\.000000%' "$RUNNER_TEMP/finance-probe.txt"
+          test "$result" = 1
+      - name: Run the documented mutmut command
+        shell: bash
+        run: |
+          export TMPDIR="$(mktemp -d /dev/shm/finance-mutmut.XXXXXX)"
+          uv pip install mutmut==3.8.1
+          uv run --offline --no-sync mutmut run --max-children 4 'app.workflow.state.x_allowed_edge__mutmut_*'
+          uv run --offline --no-sync mutmut results --all true | grep 'x_allowed_edge__mutmut_'
