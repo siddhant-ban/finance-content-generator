@@ -6,6 +6,16 @@ permissions:
   contents: read
 jobs:
   offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: tmpfs
+            workers: 0
+          - mode: parallel
+            workers: 4
+          - mode: tmpfs-parallel
+            workers: 4
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -25,7 +35,18 @@ jobs:
       - name: Verify locked runtime
         run: uv run --offline python -c "import platform,pathlib; assert platform.python_version() == pathlib.Path('.python-version').read_text().strip()"
       - name: Offline tests
-        run: uv run --offline pytest tests/unit tests/integration -m 'not phoenix_live' -q
+        shell: bash
+        run: |
+          args=()
+          if [[ '${{ matrix.mode }}' == tmpfs* ]]; then
+            df -h /dev/shm
+            args+=(--basetemp "$(mktemp -d /dev/shm/finance-pytest.XXXXXX)")
+          fi
+          if [[ '${{ matrix.workers }}' != 0 ]]; then
+            uv pip install pytest-xdist==3.8.0
+            args+=(-n '${{ matrix.workers }}')
+          fi
+          time uv run --offline --no-sync pytest tests/unit tests/integration -m 'not phoenix_live' -q "${args[@]}"
       - name: Synthetic acceptance and local evidence
         run: uv run --offline python -m app.demo --offline --output data/foundation-demo
       - name: Retention dry run on fresh absent root
