@@ -19,6 +19,7 @@ source = ["app"]
 branch = false
 
 [tool.coverage.report]
+include_namespace_packages = true
 fail_under = 90
 precision = 6
 show_missing = true
