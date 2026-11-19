@@ -6,6 +6,16 @@ permissions:
   contents: read
 jobs:
   offline:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - core: ctrace
+            workers: 4
+          - core: sysmon
+            workers: 4
+          - core: sysmon
+            workers: 8
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -33,8 +43,9 @@ jobs:
             trap 'rm -rf -- "$pytest_tmp"' EXIT
             pytest_args+=(--basetemp "$pytest_tmp")
           fi
-          uv run --offline --no-sync pytest tests/unit tests/integration -m 'not phoenix_live' -q \
-            -n 4 --cov --cov-report=term-missing "${pytest_args[@]}"
+          nproc
+          COVERAGE_CORE='${{ matrix.core }}' uv run --offline --no-sync pytest tests/unit tests/integration -m 'not phoenix_live' -q \
+            -n '${{ matrix.workers }}' --dist worksteal --cov --cov-report=term "${pytest_args[@]}"
       - name: Synthetic acceptance and local evidence
         run: uv run --offline python -m app.demo --offline --output data/foundation-demo
       - name: Retention dry run on fresh absent root
