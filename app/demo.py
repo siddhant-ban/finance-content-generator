@@ -1,4 +1,4 @@
-"""Offline synthetic foundation acceptance; never logs in, approves or publishes.
+"""Synthetic foundation acceptance; never logs in, approves or publishes.
 
 Arithmetic FakeStage execution and hand-authored synthetic editorial artifacts
 exercise infrastructure only. These validators cannot validate editorial media.
@@ -22,6 +22,8 @@ from app.evals.phoenix import PhoenixAdapter, load_offline
 from app.evals.run import canonical, create_runner, digest, persist_bundle, run_experiment
 from app.observability.models import SpanRecord
 from app.execution.fakes import FakeStage
+from app.execution.runner import AgentRunner
+from app.prompts import load_prompt
 from app.release.models import EvidencePin, ReleaseCandidate
 from app.release.service import ReleaseService
 from app.storage.artifacts import ArtifactStore
@@ -155,7 +157,8 @@ def _negative_gates(state, snapshot, manifest):
     return outcomes
 
 
-def run_demo(output_dir: Path, telemetry_mode: Literal['offline','phoenix']) -> DemoReport:
+def run_demo(output_dir: Path, telemetry_mode: Literal['offline','phoenix'], *,
+             openrouter: bool = False) -> DemoReport:
     if telemetry_mode not in {'offline','phoenix'}:
         raise ValueError('invalid_telemetry_mode')
     root = output_dir.resolve()
@@ -168,9 +171,20 @@ def run_demo(output_dir: Path, telemetry_mode: Literal['offline','phoenix']) -> 
         store, policy = review_policy(root,runner.store.conn)
         runner.store = store
         state = StateService(store.conn,store,policy)
-        request = synthetic_envelope(runner)
-        output = runner.run(FakeStage(),request)
+        candidate_runner = runner
+        if openrouter:
+            from app.execution.openrouter import OPENROUTER_PROMPT, OpenRouterStage, openrouter_configuration
+            prompt = load_prompt(OPENROUTER_PROMPT)
+            stage = OpenRouterStage(prompt)
+            candidate_runner = AgentRunner(store, runner.telemetry, runner.settings, prompt,
+                configuration=openrouter_configuration())
+        else:
+            stage = FakeStage()
+        request = synthetic_envelope(candidate_runner)
+        output = candidate_runner.run(stage,request)
         if output.status != 'OK':
+            if openrouter:
+                runner.telemetry.export_offline(root/'traces')
             raise ValueError('synthetic_execution_failed')
         candidate_ref = synthetic_artifact(store,'candidate',runner_output=output.output_ref)
         snapshot = state.create(request.story_id,request.run_id,candidate_ref,'demo','create')
@@ -277,7 +291,8 @@ def run_demo(output_dir: Path, telemetry_mode: Literal['offline','phoenix']) -> 
             manifest_path='review-manifest.json',journal_path='state.db',
             member_paths={stage:str(store._path(getattr(manifest,stage)).relative_to(root)) for stage in MEMBERS},
             runner_output_path=str(store._path(output.output_ref).relative_to(root)),member_hashes={stage:getattr(manifest,stage).sha256 for stage in MEMBERS},
-            runner_output_hash=output.output_ref.sha256,prompt_version=runner.prompt.prompt_version,prompt_hash=runner.prompt.sha256,
+            runner_output_hash=output.output_ref.sha256,prompt_version=candidate_runner.prompt.prompt_version,
+            prompt_hash=candidate_runner.prompt.sha256,
             experiments=experiments,negative_gates=negatives,release_gate=gate.model_dump(mode='json'),
             telemetry={'mode':telemetry_mode,'remote_visibility':'unverified','export':export_report,
                 'offline_path':'traces','offline_manifest':trace_manifest,
@@ -308,10 +323,12 @@ def main(argv=None):
     mode = parser.add_mutually_exclusive_group(required=True)
     mode.add_argument('--offline',action='store_true')
     mode.add_argument('--phoenix',action='store_true')
+    parser.add_argument('--openrouter',action='store_true',
+                        help='use one free OpenRouter request for the synthetic candidate')
     parser.add_argument('--output',type=Path,default=Path('data/foundation-demo'))
     args = parser.parse_args(argv)
     try:
-        report = run_demo(args.output,'offline' if args.offline else 'phoenix')
+        report = run_demo(args.output,'offline' if args.offline else 'phoenix',openrouter=args.openrouter)
         print(json.dumps({'kind':report.kind,'status':report.status,'final_state':report.final_state,
             'report_path':str((args.output/'demo-report.json').resolve()),
             'public_report_path':str((args.output/'public-report.json').resolve())},sort_keys=True))

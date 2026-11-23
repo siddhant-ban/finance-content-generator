@@ -57,6 +57,29 @@ Choose an absent root. Existing legacy/corrupt evidence or active nonempty WALs
 can legitimately produce exit 2 with protected files. Do not remove data to make
 this command pass. CI uses its own absent `data/ci-maintenance-empty` root.
 
+### Optional OpenRouter demo
+
+Run in a POSIX environment such as Linux, macOS or WSL. The foundation uses
+POSIX file locking and directory synchronization for local evidence. Use a
+checkout that preserves the LF bytes of hash-pinned prompts and eval fixtures.
+Set `OPENROUTER_API_KEY` in the ignored local `.env`, then run:
+
+```sh
+uv run --offline --env-file .env python -m app.demo --offline --openrouter --output data/foundation-openrouter
+```
+
+The opt-in sends the versioned arithmetic prompt and synthetic input to
+`openrouter/free` in one client request, with no client-side retry or
+fallback. OpenRouter selects the free model. `--offline` selects local trace
+and eval evidence.
+The three eval splits still use the fake provider. A missing credential,
+unavailable free route, or invalid answer stops the demo before candidate
+creation. Failed model calls retain local traces and any safe usage metadata
+the provider supplied. A successful run stores the validated result and stops at
+`AWAITING_APPROVAL`. Inspect `demo-report.json` and `traces/spans.jsonl` in
+the output directory for the configured route, reported usage and resolved
+model where available. This checks synthetic provider integration.
+
 ## Durable tracing and offline evidence
 
 `Telemetry(Path("data/telemetry.sqlite"))` uses a dedicated SQLite outbox, separate

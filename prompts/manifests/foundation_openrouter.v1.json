@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "prompt_id": "foundation_openrouter",
+  "prompt_version": "foundation_openrouter.v1",
+  "path": "../foundation/openrouter_stage.v1.md",
+  "sha256": "5d6bb5451d69a739dc4c8e51010ff574fc0da62d25edbca512e6dccef5405ce1"
+}

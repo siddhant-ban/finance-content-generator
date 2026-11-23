@@ -17,6 +17,14 @@ class PolicyError(ValueError):
 class TransientProviderError(Exception):
     """Explicitly retryable provider/network failure; messages remain private."""
 
+class ProviderResponseError(ValueError):
+    """A rejected completion with safe metadata from the completed request."""
+
+    def __init__(self, usage: Usage, resolved_model: str | None):
+        super().__init__('invalid_provider_completion')
+        self.usage = usage
+        self.resolved_model = resolved_model
+
 class ModelConfiguration(StrictModel):
     provider: Nonempty = 'fake'
     model: Nonempty = 'fake'
@@ -75,22 +83,37 @@ class RunContext:
     def generate(self, provider: Provider, request: ModelRequest) -> ModelResponse:
         request = type(request).model_validate_json(request.model_dump_json())
         config = {k: request.model_dump()[k] for k in ModelConfiguration.model_fields}
-        if config != self.__configuration.model_dump() or request.provider != 'fake':
+        if config != self.__configuration.model_dump():
             raise PolicyError('provider configuration denied')
-        # Task6 deliberately admits only the local fake implementation.
-        from app.execution.fakes import FakeProvider
-        if type(provider) is not FakeProvider:
-            raise PolicyError('only the synthetic provider is available')
+        if request.provider == 'fake':
+            from app.execution.fakes import FakeProvider
+            if type(provider) is not FakeProvider:
+                raise PolicyError('provider implementation denied')
+        elif request.provider == 'openrouter':
+            from app.execution.openrouter import OpenRouterProvider, openrouter_configuration
+            if type(provider) is not OpenRouterProvider or config != openrouter_configuration().model_dump():
+                raise PolicyError('provider implementation denied')
+        else:
+            raise PolicyError('provider configuration denied')
         with self.__telemetry.span('model.call', 'finance-media-orchestrator', {
             'model.provider': request.provider, 'model.name': request.model,
             'model.parameters': request.parameters}) as span:
             self.__usages.append(Usage())
-            response = provider.generate(request)
+            try:
+                response = provider.generate(request)
+            except ProviderResponseError as error:
+                self.__usages[-1] = error.usage
+                span.set_attributes(usage_attributes(error.usage))
+                if error.resolved_model is not None:
+                    span.set_attributes({'model.resolved_name': error.resolved_model})
+                raise
             response = type(response).model_validate_json(response.model_dump_json())
             if {k: response.model_dump()[k] for k in ModelConfiguration.model_fields} != config:
                 raise ValueError('response metadata mismatch')
             self.__usages[-1] = response.usage
             span.set_attributes(usage_attributes(response.usage))
+            if request.provider == 'openrouter' and response.resolved_model is not None:
+                span.set_attributes({'model.resolved_name': response.resolved_model})
             return response
 
 def usage_attributes(usage: Usage) -> dict:

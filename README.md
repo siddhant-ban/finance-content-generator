@@ -1,6 +1,10 @@
-# Finance Media Automation — Codex + Superpowers Blueprint
+# Finance Content Generator
 
-An evaluation-first blueprint for building a mostly autonomous finance/economics news-to-short-video workflow. It is designed to be implemented in small, reviewable slices with Codex and the Superpowers GitHub skills framework.
+A low-cost, evaluation-first pipeline for turning finance and economics news into short videos. The first production milestone is a rights-cleared video based on a real story, reviewed by an authenticated human and exported for manual upload.
+
+## Contributing
+
+Work directly on a task by default. To use a particular workflow, name it in your request, for example “Use Superpowers for this slice” or “Use Matt Pocock’s TDD skill for this fix.” The same convention applies to pstack and Addy Osmani’s skills when available. All workflows follow the repository’s editorial safeguards and change-specific verification requirements in [AGENTS.md](AGENTS.md).
 
 ## Product constraints
 
@@ -22,7 +26,6 @@ An evaluation-first blueprint for building a mostly autonomous finance/economics
 - `superpowers/IMPLEMENTATION_PLAN.md` — staged implementation tasks suitable for Superpowers.
 - `docs/superpowers/specs/2026-11-09-foundations-design.md` — approved foundation design and architecture decisions.
 - `docs/superpowers/plans/2026-11-09-foundations.md` — detailed test-first foundation tasks and acceptance gates.
-- `AGENTS.md` — durable Codex project rules.
 
 ## Implemented synthetic foundations
 

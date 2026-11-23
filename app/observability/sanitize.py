@@ -16,7 +16,7 @@ NUMBERS = frozenset(('retry.count', 'latency.ms', 'latency_ms', 'source.count', 
     'usage.measured_cost', 'usage.estimated_cost'))
 ENUMS = {
     'evaluator.id': frozenset(('contract','policy','evidence','state','metadata','fake_rubric')),
-    'model.provider': frozenset(('ollama', 'api', 'openai', 'anthropic', 'fake', 'local')),
+    'model.provider': frozenset(('ollama', 'api', 'openai', 'anthropic', 'fake', 'local', 'openrouter')),
     'agent.name': frozenset(('news_scout', 'novelty_analyst', 'researcher', 'fact_checker', 'growth_analyst',
                              'news-scout', 'novelty', 'research', 'fact-check', 'scriptwriter', 'producer', 'growth', 'orchestrator', 'foundation')),
     'result.status': frozenset(('OK', 'FAILED', 'BLOCKED', 'NEEDS_RESEARCH', 'REJECTED', 'AWAITING_APPROVAL')),
@@ -96,7 +96,13 @@ def sanitize_attributes(attributes: Mapping[str, object]) -> dict[str, object]:
             if isinstance(value, str) and value in names:
                 safe[key] = value
         elif key == 'model.name':
-            if isinstance(value, str) and _model_identifier(value):
+            if isinstance(value, str) and (value == 'openrouter/free' or _model_identifier(value)):
+                safe[key] = value
+        elif key == 'model.resolved_name':
+            if (isinstance(value, str) and len(value) <= 128 and '..' not in value
+                    and re.fullmatch(r'[A-Za-z][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.:-]*', value)
+                    and not any(part.startswith(('sk-', 'ghp_', 'gho_', 'github_pat_', 'token', 'password'))
+                                for part in value.lower().split('/'))):
                 safe[key] = value
         elif key == 'usage.currency':
             if isinstance(value, str) and re.fullmatch(r'[A-Z]{3}', value):

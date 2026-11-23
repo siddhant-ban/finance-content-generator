@@ -1,4 +1,4 @@
-"""Durable fake-stage runner with bounded retries and explicit interruption.
+"""Durable synthetic-stage runner with bounded retries and explicit interruption.
 
 External work is never assumed exactly-once. Only stored, validated outputs can
 be handed to a constructor-bound StateService; recovery replays the saved request.
@@ -87,12 +87,21 @@ class AgentRunner:
         if not settings.fake_stage_enabled or settings.environment not in {'test','demo'}:
             raise PolicyError('fake stages require explicit test/demo configuration')
         prompt = PromptSpec.model_validate(self.prompt.model_dump())
-        # The only runnable prompt in this foundation is checked against disk.
-        if load_prompt(Path('prompts/manifests/foundation.v1.json')) != prompt:
-            raise ValueError('unverified foundation prompt')
         config = ModelConfiguration.model_validate_json(self.configuration.model_dump_json())
-        if config.provider != 'fake':
-            raise PolicyError('only fake execution is available')
+        if config.provider == 'fake':
+            manifest = Path('prompts/manifests/foundation.v1.json')
+        elif config.provider == 'openrouter':
+            from app.execution.openrouter import (
+                OPENROUTER_PROMPT, OpenRouterProvider, OpenRouterStage, openrouter_configuration,
+            )
+            if (type(stage) is not OpenRouterStage or config != openrouter_configuration()
+                    or type(stage.provider) is not OpenRouterProvider or stage.provider.prompt != prompt):
+                raise PolicyError('openrouter stage configuration denied')
+            manifest = OPENROUTER_PROMPT
+        else:
+            raise PolicyError('provider configuration denied')
+        if load_prompt(manifest) != prompt:
+            raise ValueError('unverified foundation prompt')
         for field in ('agent_name','agent_version','prompt_id','prompt_version'):
             if getattr(envelope,field) != getattr(stage,field):
                 raise ValueError('stage metadata mismatch')
