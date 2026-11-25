@@ -315,11 +315,13 @@ def test_run_scout_with_openrouter_adapter_enforces_routing_and_continues_on_inv
     recording = json.loads(RECORDING.read_bytes())
     first_item = ScoutFeedItem.model_validate_json(json.dumps(next(iter(recording["feed"]["items"].values()))))
     second_payload = first_item.model_dump(mode="json")
-    second_payload["headline"] = "Second synthetic release"
+    second_payload["headline"] = "Employment Situation - August 2025"
     second_payload["source"].update(
         source_id=str(uuid4()),
-        canonical_url="https://example.invalid/second-release",
-        original_url="https://example.invalid/second-release",
+        canonical_url="https://example.invalid/employment-situation-august-2025",
+        original_url="https://example.invalid/employment-situation-august-2025",
+        excerpt="Total nonfarm payroll employment changed little in August.",
+        content_hash=hashlib.sha256(b"second-synthetic-release").hexdigest(),
     )
     second_item = ScoutFeedItem.model_validate_json(json.dumps(second_payload))
     second_ref = {
