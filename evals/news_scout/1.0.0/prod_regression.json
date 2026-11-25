@@ -1,0 +1,72 @@
+[
+  {
+    "example_id": "regression-syndication",
+    "category": "syndication",
+    "window_start": "2026-02-02T00:00:00Z",
+    "window_end": "2026-02-03T00:00:00Z",
+    "observations": [
+      {
+        "source": {
+          "source_id": "regression-syndication-issuer",
+          "revision": 1,
+          "url": "https://scout-fixtures.invalid/regression-syndication-issuer",
+          "publisher": "Synthetic bulletin archive",
+          "source_class": "primary",
+          "published_at": "2026-02-02T13:00:00Z",
+          "retrieved_at": "2026-02-02T15:00:00Z",
+          "locator": "Authored bulletin regression-syndication-issuer, paragraph 1",
+          "excerpt": null,
+          "fingerprint": "7f00b5cd228bb4bc30f61175ba623a687ca3e6fd19fa4b6d3a424b61587bcec7"
+        },
+        "disposition": "candidate",
+        "event": "borrowing-overlap-regression"
+      },
+      {
+        "source": {
+          "source_id": "regression-syndication-copy",
+          "revision": 1,
+          "url": "https://scout-fixtures.invalid/regression-syndication-copy",
+          "publisher": "Synthetic wire archive",
+          "source_class": "secondary",
+          "published_at": "2026-02-02T13:00:00Z",
+          "retrieved_at": "2026-02-02T15:00:00Z",
+          "locator": "Authored bulletin regression-syndication-copy, paragraph 1",
+          "excerpt": null,
+          "fingerprint": "c38907a198ff449621358eec8a31f2d0df14bf5a21f91f169a7e3be9eebb78ca"
+        },
+        "disposition": "candidate",
+        "event": "borrowing-overlap-regression"
+      }
+    ],
+    "events": [
+      {
+        "event_id": "borrowing-overlap-regression",
+        "near_duplicate_group": "borrowing-overlap-regression",
+        "critical_duplicates": true,
+        "candidate_revision": 1,
+        "topics": [
+          "borrowing"
+        ],
+        "entities": [
+          "Synthetic survey office"
+        ],
+        "warnings": [],
+        "claims": [
+          {
+            "text": "The synthetic bulletin reported unchanged borrowing costs.",
+            "source_ids": [
+              "regression-syndication-issuer",
+              "regression-syndication-copy"
+            ]
+          }
+        ]
+      }
+    ],
+    "rights": {
+      "status": "synthetic_fixture",
+      "provenance": "Original fictional bulletin examples authored for this repository",
+      "retention": "Repository fixture only; no third-party material"
+    },
+    "label_origin": "authored_fixture"
+  }
+]
