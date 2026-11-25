@@ -19,6 +19,11 @@ from app.contracts.scout import (
     ScoutFeedItem, ScoutFeedPoll, ScoutItemDisposition, ScoutMember, ScoutRunInput, ScoutRunOutput,
     ScoutTokenUsage, StoryCandidate, candidate_fingerprint, run_outcome, source_ref,
 )
+from app.observability.scout_tracing import (
+    bind_scout_context, emit_item_span, extract_source_class, finalize_fetch_span,
+    finalize_scout_run_span, mark_model_span_error, scout_dispatch_span, scout_fetch_scope,
+    scout_fetch_span, scout_model_span, scout_run_span,
+)
 from app.observability.tracing import Telemetry
 from app.scout.cluster import cluster_items, combine_warnings
 from app.scout.workflow import deliver_candidate, record_story_revision, resolve_story_identity, scout_state
@@ -86,6 +91,7 @@ def exact_clusters(request: ScoutRunInput, items: Mapping[str, ScoutMember], *,
 class _GraphState(TypedDict, total=False):
     order: tuple[str, ...]
     eligible: dict[str, ScoutMember]
+    source_classes: dict[str, str]
     clusters: dict[str, tuple[str, ...]]
     dispositions: dict[str, ScoutItemDisposition]
     issue: RunIssue | None
@@ -143,10 +149,32 @@ class _Run:
         try:
             with self.telemetry.span("tool.call", SCOUT_PROJECT, {
                 "run.id": request.run_id, "tool.ref": request.configuration.feed_snapshot,
+                "release.id": request.release_id,
             }) as span:
-                fetched = self.fetch(request, timeout_seconds=timeout)
+                with scout_fetch_scope() as fetch_count:
+                    fetched = self.fetch(request, timeout_seconds=timeout)
                 batch = fetched.items if isinstance(fetched, FeedBatch) else fetched
                 span.set_attribute("source.count", len(batch))
+                if fetch_count[0] == 0:
+                    if isinstance(fetched, FeedBatch):
+                        for poll in fetched.polls:
+                            with scout_fetch_span(
+                                self.telemetry, run_id=request.run_id, feed_id=poll.feed_id,
+                                feed_revision=poll.revision, feed_snapshot=request.configuration.feed_snapshot,
+                                request=request,
+                            ) as fetch_span:
+                                finalize_fetch_span(fetch_span, poll, source_count=len(poll.item_ids))
+                    else:
+                        with scout_fetch_span(
+                            self.telemetry, run_id=request.run_id, feed_id="snapshot", feed_revision=1,
+                            feed_snapshot=request.configuration.feed_snapshot, request=request,
+                        ) as fetch_span:
+                            finalize_fetch_span(
+                                fetch_span,
+                                ScoutFeedPoll(feed_id="snapshot", revision=1, status="read",
+                                              item_ids=tuple(k for k in batch if isinstance(k, str) and k.strip())),
+                                source_count=len(batch),
+                            )
         except TimeoutError:
             return {"issue": "time_limit"}
         except OSError:
@@ -157,7 +185,10 @@ class _Run:
         expired = not self.remaining()
         dispositions: dict[str, ScoutItemDisposition] = {}
         eligible: dict[str, ScoutMember] = {}
+        source_classes: dict[str, str] = {}
         for index, item_id in enumerate(batch):
+            source_class = extract_source_class(batch[item_id])
+            source_classes[item_id] = source_class
             if index >= request.limits.max_items:
                 dispositions[item_id] = _disposition(item_id, "unprocessed", "item_limit")
             elif expired or not self.remaining():
@@ -171,12 +202,19 @@ class _Run:
                 member = _eligible(batch[item_id], request)
                 if isinstance(member, ScoutMember):
                     eligible[item_id] = member
+                    source_classes[item_id] = member.source.source_class
                 else:
                     status: ItemStatus = "failed" if member == "invalid_provenance" else "withheld"
                     dispositions[item_id] = _disposition(item_id, status, member)
+            if item_id in dispositions:
+                disp = dispositions[item_id]
+                emit_item_span(
+                    self.telemetry, request=request, item_id=item_id,
+                    status=disp.status, reason=disp.reason, source_class=source_classes[item_id],
+                )
         result: _GraphState = {
-            "order": tuple(batch), "eligible": eligible, "dispositions": dispositions,
-            "issue": "time_limit" if expired else None,
+            "order": tuple(batch), "eligible": eligible, "source_classes": source_classes,
+            "dispositions": dispositions, "issue": "time_limit" if expired else None,
         }
         if isinstance(fetched, FeedBatch):
             result["feeds"] = fetched.polls
@@ -188,7 +226,9 @@ class _Run:
             return {}
         timeout = self.remaining()
         if not timeout:
-            return self.skip_group(state, "unprocessed", "time_limit")
+            skipped = self.skip_group(state, "unprocessed", "time_limit")
+            self._emit_skipped_items(state, skipped["dispositions"])
+            return skipped
 
         try:
             groups = dict(self.cluster(self.request, eligible.copy(), timeout_seconds=timeout))
@@ -198,10 +238,24 @@ class _Run:
                     or set(members) != set(eligible)):
                 raise ValueError("clusterer must partition its eligible inputs")
         except TimeoutError:
-            return self.skip_group(state, "unprocessed", "time_limit")
+            skipped = self.skip_group(state, "unprocessed", "time_limit")
+            self._emit_skipped_items(state, skipped["dispositions"])
+            return skipped
         except (ValueError, TypeError, OSError):
-            return self.skip_group(state, "failed", "cluster_failed")
+            skipped = self.skip_group(state, "failed", "cluster_failed")
+            self._emit_skipped_items(state, skipped["dispositions"])
+            return skipped
         return {"clusters": groups}
+
+    def _emit_skipped_items(self, state: _GraphState, dispositions: Mapping[str, ScoutItemDisposition]) -> None:
+        source_classes = state.get("source_classes", {})
+        for item_id in state.get("eligible", {}):
+            disp = dispositions[item_id]
+            emit_item_span(
+                self.telemetry, request=self.request, item_id=item_id,
+                status=disp.status, reason=disp.reason,
+                source_class=source_classes.get(item_id, "unknown"),
+            )
 
     @staticmethod
     def skip_group(state: _GraphState, status: ItemStatus, reason: Literal["cluster_failed", "time_limit"]) -> _GraphState:
@@ -218,17 +272,19 @@ class _Run:
         order = {item_id: index for index, item_id in enumerate(state.get("order", ()))}
         clusters = sorted(state.get("clusters", {}).items(), key=lambda pair: min(order[item_id] for item_id in pair[1]))
         eligible = state.get("eligible", {})
+        source_classes = state.get("source_classes", {})
         for key, ids in clusters:
             tokens_left = self.request.limits.max_tokens - input_tokens - output_tokens
             timeout = self.remaining()
             ref = None
+            meta: dict[str, object] = {}
             if not timeout:
                 status, reason = "unprocessed", "time_limit"
             elif tokens_left <= 0 or budget_unknown:
                 status, reason = "unprocessed", "token_limit"
             else:
                 status, reason, ref, usage = self.process_cluster(
-                    key, tuple(eligible[item_id] for item_id in ids), tokens_left,
+                    key, tuple(eligible[item_id] for item_id in ids), tokens_left, _meta=meta,
                 )
                 if usage is None:
                     budget_unknown = True
@@ -236,13 +292,27 @@ class _Run:
                     input_tokens += usage.input_tokens
                     output_tokens += usage.output_tokens
             dispositions.update((item_id, _disposition(item_id, status, reason, ref)) for item_id in ids)
+            for item_id in ids:
+                emit_item_span(
+                    self.telemetry,
+                    request=self.request,
+                    item_id=item_id,
+                    status=status,
+                    reason=reason,
+                    source_class=source_classes.get(item_id, eligible[item_id].source.source_class),
+                    story_id=cast(UUID | None, meta.get("story_id")),
+                    story_revision=cast(int | None, meta.get("story_revision")),
+                    artifact_hash=ref.sha256 if ref is not None else None,
+                    source_refs=cast(tuple[str, ...], meta.get("source_refs", ())),
+                )
         return {
             "dispositions": dispositions,
             "tokens": ScoutTokenUsage(input_tokens=input_tokens, output_tokens=output_tokens),
         }
 
     def process_cluster(
-        self, key: str, members: tuple[ScoutMember, ...], max_tokens: int
+        self, key: str, members: tuple[ScoutMember, ...], max_tokens: int,
+        *, _meta: dict[str, object] | None = None,
     ) -> tuple[ItemStatus, ItemReason, ArtifactRef | None, ScoutTokenUsage | None]:
         request = self.request
         zero = ScoutTokenUsage(input_tokens=0, output_tokens=0)
@@ -253,6 +323,9 @@ class _Run:
             if first.ref != member.ref:
                 return "failed", "invalid_provenance", None, zero
         sources = tuple(by_revision.values())
+        source_refs = tuple(m.ref.source_record_hash for m in sources)
+        if _meta is not None:
+            _meta["source_refs"] = source_refs
         fingerprint = candidate_fingerprint(sources)
         if fingerprint in request.fingerprints.known:
             return "unchanged", "known_fingerprint", None, zero
@@ -271,36 +344,50 @@ class _Run:
             target_revision = latest_revision
         else:
             target_revision = latest_revision + 1
-        try:
-            with self.telemetry.span("model.call", SCOUT_PROJECT, {
-                "run.id": request.run_id, "story.id": story_id, "model.parameters.max_tokens": max_tokens,
-                "source.count": len(sources), "retry.count": 0,
-            }) as span:
+        if _meta is not None:
+            _meta["story_id"] = story_id
+            _meta["story_revision"] = target_revision
+        with scout_model_span(
+            self.telemetry,
+            request=request,
+            story_id=story_id,
+            story_revision=target_revision,
+            max_tokens=max_tokens,
+            source_count=len(sources),
+            source_refs=source_refs,
+        ) as span:
+            try:
                 result = self.enrich(request, sources, max_tokens=max_tokens, timeout_seconds=timeout)
                 usage = ScoutTokenUsage.model_validate(result.usage.model_dump())
                 span.set_attributes({"usage.input_tokens": usage.input_tokens, "usage.output_tokens": usage.output_tokens})
-        except TokenBudgetExceeded:
-            return "unprocessed", "token_limit", None, zero
-        except TimeoutError:
-            return "unprocessed", "time_limit", None, None
-        except (OSError, ValueError):
-            return "failed", "model_unavailable", None, None
-        if usage.total > max_tokens:
-            return "failed", "model_token_overrun", None, usage
-        if not self.remaining():
-            return "unprocessed", "time_limit", None, usage
+            except TokenBudgetExceeded:
+                mark_model_span_error(span, "token_limit", availability_reason="not_reported")
+                return "unprocessed", "token_limit", None, zero
+            except TimeoutError:
+                mark_model_span_error(span, "time_limit", availability_reason="unavailable")
+                return "unprocessed", "time_limit", None, None
+            except (OSError, ValueError):
+                mark_model_span_error(span, "model_unavailable", availability_reason="unavailable")
+                return "failed", "model_unavailable", None, None
+            if usage.total > max_tokens:
+                mark_model_span_error(span, "model_token_overrun")
+                return "failed", "model_token_overrun", None, usage
+            if not self.remaining():
+                mark_model_span_error(span, "time_limit")
+                return "unprocessed", "time_limit", None, usage
 
-        try:
-            enrichment = ScoutEnrichment.model_validate_json(result.output)
-            warnings = combine_warnings(enrichment.warnings, sources)
-            candidate = StoryCandidate(
-                **(enrichment.model_dump() | {"warnings": warnings}),
-                schema_id=SCOUT_SCHEMA, kind="editorial",
-                story_id=story_id, cluster_id=cluster_id, revision=target_revision, fingerprint=fingerprint,
-                representative=sources[0].ref, members=sources,
-            )
-        except ValidationError:
-            return "failed", "invalid_enrichment", None, usage
+            try:
+                enrichment = ScoutEnrichment.model_validate_json(result.output)
+                warnings = combine_warnings(enrichment.warnings, sources)
+                candidate = StoryCandidate(
+                    **(enrichment.model_dump() | {"warnings": warnings}),
+                    schema_id=SCOUT_SCHEMA, kind="editorial",
+                    story_id=story_id, cluster_id=cluster_id, revision=target_revision, fingerprint=fingerprint,
+                    representative=sources[0].ref, members=sources,
+                )
+            except ValidationError:
+                mark_model_span_error(span, "invalid_enrichment")
+                return "failed", "invalid_enrichment", None, usage
         if not set(candidate.topics) <= set(request.topic_policy.topics):
             return "withheld", "outside_topic_policy", None, usage
 
@@ -309,9 +396,14 @@ class _Run:
         ref = self.store.put(candidate.canonical_bytes(), "application/json", candidate.schema_version)
         if not self.remaining():
             return "unprocessed", "time_limit", None, usage
-        with self.telemetry.span("workflow.transition", SCOUT_PROJECT, {
-            "run.id": request.run_id, "story.id": story_id, "artifact.hash": ref.sha256,
-        }):
+        with scout_dispatch_span(
+            self.telemetry,
+            request=request,
+            story_id=story_id,
+            story_revision=target_revision,
+            artifact_hash=ref.sha256,
+            source_refs=source_refs,
+        ) as dispatch:
             try:
                 delivery_status = deliver_candidate(self.workflow, candidate, ref, request.run_id, self.trace_id)
                 record_story_revision(
@@ -324,7 +416,9 @@ class _Run:
                     reason_code="candidate_created" if candidate.revision == 1 else "source_correction",
                 )
             except StateConflict:
+                dispatch.finalize("failed", error_code="conflict")
                 return "failed", "revision_conflict", None, usage
+            dispatch.finalize(delivery_status)
         if delivery_status == "new":
             return "new", "candidate_created", ref, usage
         if delivery_status == "updated":
@@ -359,16 +453,7 @@ def run_scout(
     request = ScoutRunInput.model_validate(request.model_dump())
     deadline = clock() + request.limits.timeout_seconds
     input_ref = _pin_request(store, request)
-    config = request.configuration
-    with telemetry.span("agent.invoke", SCOUT_PROJECT, {
-        "run.id": request.run_id, "invocation.id": request.invocation_id, "agent.name": "news_scout",
-        "agent.version": "1.0", "input.ref": input_ref.sha256, "config.hash": config.record_hash(),
-        "config.version": config.version, "prompt.hash": config.prompt_hash, "prompt.version": config.prompt_version,
-        "model.provider": config.provider, "model.name": config.model,
-        "model.parameters": {"temperature": config.temperature, "max_tokens": request.limits.max_tokens},
-        "retry.count": 0,
-    }) as span:
-        trace_id = f"{span.get_span_context().trace_id:032x}"
+    with scout_run_span(telemetry, request, input_ref=input_ref) as (span, trace_id):
         worker = _Run(request, store, scout_state(store), telemetry, fetch, cluster, enrich,
                       trace_id, deadline, clock)
         graph = StateGraph(_GraphState)
@@ -387,7 +472,8 @@ def run_scout(
             token = otel_context.attach(telemetry_context)
             try:
                 with tracing_context(enabled=False, parent=False):
-                    return cast(_GraphState, graph.compile().invoke({}, {"recursion_limit": 5}))
+                    with bind_scout_context(telemetry, request):
+                        return cast(_GraphState, graph.compile().invoke({}, {"recursion_limit": 5}))
             finally:
                 otel_context.detach(token)
 
@@ -405,6 +491,5 @@ def run_scout(
             items=items, issue=issue, reported_tokens=result["tokens"], feeds=feeds,
         )
         output_ref = store.put(output.canonical_bytes(), "application/json", "1.0")
-        status = {"failed": "FAILED", "partial": "BLOCKED"}.get(output.outcome, "OK")
-        span.set_attributes({"output.ref": output_ref.sha256, "result.status": status})
+        finalize_scout_run_span(span, output, output_ref)
         return output

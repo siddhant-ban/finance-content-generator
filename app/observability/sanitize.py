@@ -7,13 +7,15 @@ from uuid import UUID
 PROJECTS = frozenset('finance-media-' + name for name in (
     'news-scout', 'novelty', 'research', 'fact-check', 'scriptwriter', 'producer', 'growth', 'orchestrator'))
 OPERATIONS = frozenset(('pipeline.run', 'agent.invoke', 'model.call', 'tool.call',
-    'evaluator.run', 'workflow.transition', 'approval.decision', 'render.run', 'publish.run', 'telemetry.operation'))
+    'evaluator.run', 'workflow.transition', 'approval.decision', 'render.run', 'publish.run',
+    'scout.run', 'scout.fetch', 'scout.item', 'scout.dispatch', 'telemetry.operation'))
 EVENTS = frozenset(('exception', 'human_decision', 'evaluator.error', 'state.transition', 'source.used', 'tool.completed', 'telemetry.event'))
 ERRORS = frozenset(('exception', 'timeout', 'unavailable', 'invalid_input', 'policy_denied',
-    'capacity_exceeded', 'persistence_failed', 'export_failed', 'export_timeout', 'invalid_record', 'duplicate_conflict'))
+    'capacity_exceeded', 'persistence_failed', 'export_failed', 'export_timeout', 'invalid_record', 'duplicate_conflict',
+    'conflict', 'token_limit', 'model_unavailable', 'model_token_overrun', 'invalid_enrichment'))
 PARAMETERS = frozenset(('temperature', 'top_p', 'top_k', 'max_tokens', 'seed', 'frequency_penalty', 'presence_penalty'))
 NUMBERS = frozenset(('retry.count', 'latency.ms', 'latency_ms', 'source.count', 'claim.count', 'usage.input_tokens', 'usage.output_tokens',
-    'usage.measured_cost', 'usage.estimated_cost'))
+    'usage.measured_cost', 'usage.estimated_cost', 'feed.revision', 'story.revision'))
 ENUMS = {
     'evaluator.id': frozenset(('contract','policy','evidence','state','metadata','fake_rubric')),
     'model.provider': frozenset(('ollama', 'api', 'openai', 'anthropic', 'fake', 'local', 'openrouter')),
@@ -25,6 +27,20 @@ ENUMS = {
     'error.type': ERRORS,
     'environment': frozenset(('local', 'test', 'demo', 'production')),
     'usage.availability_reason': frozenset(('not_reported', 'unavailable')),
+    'feed.status': frozenset(('read', 'not_modified', 'unavailable', 'limited')),
+    'feed.reason': frozenset(('http_error', 'timeout', 'transport_error', 'invalid_rss', 'missing_cache',
+                              'body_limit', 'feed_limit', 'time_limit', 'unsupported_encoding')),
+    'item.status': frozenset(('new', 'updated', 'unchanged', 'withheld', 'failed', 'unprocessed')),
+    'item.reason': frozenset((
+        'candidate_created', 'known_fingerprint', 'already_delivered', 'no_publication_time',
+        'outside_window', 'unknown_rights', 'invalid_provenance', 'outside_topic_policy',
+        'invalid_enrichment', 'model_unavailable', 'model_token_overrun', 'cluster_failed',
+        'revision_conflict', 'item_limit', 'token_limit', 'time_limit',
+        'malformed_feed_item', 'duplicate_feed_item',
+    )),
+    'source.class': frozenset(('primary', 'reputable_secondary', 'commentary', 'unknown')),
+    'delivery.status': frozenset(('new', 'updated', 'unchanged', 'pending', 'failed', 'delivered', 'replayed')),
+    'run.outcome': frozenset(('complete', 'empty', 'partial', 'failed')),
 }
 
 def _number(value: object) -> bool:
@@ -71,13 +87,15 @@ def sanitize_attributes(attributes: Mapping[str, object]) -> dict[str, object]:
                 safe[key] = value
         elif key in NUMBERS:
             if _number(value) and value >= 0:
-                if key in ('retry.count', 'source.count', 'claim.count', 'usage.input_tokens', 'usage.output_tokens') and type(value) is not int:
+                if key in ('retry.count', 'source.count', 'claim.count', 'usage.input_tokens', 'usage.output_tokens', 'feed.revision', 'story.revision') and type(value) is not int:
+                    continue
+                if key in ('feed.revision', 'story.revision') and value < 1:
                     continue
                 safe[key] = value
         elif key in ENUMS:
             if isinstance(value, str) and value in ENUMS[key]:
                 safe[key] = value
-        elif key in ('run.id', 'story.id', 'invocation.id', 'claim.id', 'decision_id', 'source.id', 'tool.id', 'experiment.id'):
+        elif key in ('run.id', 'story.id', 'invocation.id', 'claim.id', 'decision_id', 'source.id', 'tool.id', 'experiment.id', 'release.id'):
             if isinstance(value, UUID):
                 safe[key] = str(value)
             elif isinstance(value, str):
@@ -87,6 +105,18 @@ def sanitize_attributes(attributes: Mapping[str, object]) -> dict[str, object]:
                     pass
         elif key in ('source.ref', 'tool.ref', 'input.ref', 'output.ref', 'prompt.hash', 'config.hash', 'artifact.hash'):
             if isinstance(value, str) and re.fullmatch(r'[0-9a-f]{64}', value):
+                safe[key] = value
+        elif key == 'source.refs':
+            if isinstance(value, (tuple, list)) and len(value) <= 32 and all(isinstance(item, str) and re.fullmatch(r'[0-9a-f]{64}', item) for item in value):
+                safe[key] = list(value)
+        elif key == 'feed.id':
+            if isinstance(value, str) and re.fullmatch(r'[a-z0-9][a-z0-9-]{0,79}', value):
+                safe[key] = value
+        elif key == 'item.id':
+            if (isinstance(value, str) and len(value) <= 128 and '..' not in value
+                    and '://' not in value
+                    and re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.:-]*', value)
+                    and not value.lower().startswith(('sk-', 'ghp_', 'gho_', 'github_pat_', 'token', 'password', 'bearer'))):
                 safe[key] = value
         elif key in ('agent.version', 'prompt.version', 'dataset.version', 'config.version'):
             if isinstance(value, str) and re.fullmatch(r'(?:[a-z][a-z0-9_]*\.)?v?[0-9]+(?:\.[0-9]+){0,3}', value):
