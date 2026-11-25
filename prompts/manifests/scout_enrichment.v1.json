@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "prompt_id": "scout_enrichment",
+  "prompt_version": "scout_enrichment.v1",
+  "path": "../scout/enrichment.v1.md",
+  "sha256": "aab972bdf2f6ef94bdfdbd7913dfa97c2f27ce04f2f20dd364d1fcc1f2ef94b5"
+}
