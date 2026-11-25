@@ -1,0 +1,30 @@
+# Scout evaluation example. Select one named profile with FINANCE_SCOUT_EVAL_PROFILE.
+# Rates are decimal USD per million tokens. The cap covers the whole experiment.
+schema_version = 1
+default_profile = "ling"
+hard_spend_cap_usd = "0.00"
+
+[profiles.ling]
+model_id = "inclusionai/ling-3.2-flash:free"
+input_usd_per_million_tokens = "0"
+output_usd_per_million_tokens = "0"
+
+[profiles.ernie]
+model_id = "baidu/ernie-5.5-flash-preview:free"
+input_usd_per_million_tokens = "0"
+output_usd_per_million_tokens = "0"
+
+[profiles.lfm]
+model_id = "liquid/lfm-3-1.7b:free"
+input_usd_per_million_tokens = "0"
+output_usd_per_million_tokens = "0"
+
+[profiles.particle]
+model_id = "particle-ai/particle-1:free"
+input_usd_per_million_tokens = "0"
+output_usd_per_million_tokens = "0"
+
+[profiles.nemotron]
+model_id = "nvidia/nemotron-3.5-super-vl:free"
+input_usd_per_million_tokens = "0"
+output_usd_per_million_tokens = "0"
