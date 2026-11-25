@@ -355,7 +355,7 @@ def test_scout_deliveries_defensive_schema_and_telemetry_outage_view(tmp_path):
         with conn:
             conn.execute(
                 """
-                CREATE TABLE scout_deliveries (
+                CREATE TABLE IF NOT EXISTS scout_deliveries (
                     story_id TEXT NOT NULL,
                     revision INTEGER NOT NULL,
                     cluster_id TEXT NOT NULL,
@@ -363,9 +363,9 @@ def test_scout_deliveries_defensive_schema_and_telemetry_outage_view(tmp_path):
                     run_id TEXT NOT NULL,
                     invocation_id TEXT NOT NULL,
                     status TEXT NOT NULL,
-                    replay_mode TEXT,
+                    replay_mode TEXT NOT NULL DEFAULT 'live',
                     source_run_id TEXT,
-                    trace_id TEXT NOT NULL,
+                    trace_id TEXT,
                     error_code TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
@@ -373,19 +373,21 @@ def test_scout_deliveries_defensive_schema_and_telemetry_outage_view(tmp_path):
                 )
                 """
             )
+            for digest in ("a" * 64, "b" * 64, "c" * 64):
+                conn.execute("INSERT OR IGNORE INTO artifacts VALUES (?, 'application/json', 10, '1.0')", (digest,))
             now_iso = NOW.isoformat()
             run_id = str(uuid4())
             conn.execute(
                 "INSERT INTO scout_deliveries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid4()), 1, str(uuid4()), "a" * 64, run_id, str(uuid4()), "pending", None, None, "1" * 32, None, now_iso, now_iso),
+                (str(uuid4()), 1, str(uuid4()), "a" * 64, run_id, str(uuid4()), "pending", "live", None, "1" * 32, None, now_iso, now_iso),
             )
             conn.execute(
                 "INSERT INTO scout_deliveries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid4()), 1, str(uuid4()), "b" * 64, run_id, str(uuid4()), "failed", "republish", run_id, "2" * 32, "state_conflict", now_iso, now_iso),
+                (str(uuid4()), 1, str(uuid4()), "b" * 64, run_id, str(uuid4()), "failed", "reeval", run_id, "2" * 32, "state_conflict", now_iso, now_iso),
             )
             conn.execute(
                 "INSERT INTO scout_deliveries VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (str(uuid4()), 1, str(uuid4()), "c" * 64, run_id, str(uuid4()), "delivered", None, None, "3" * 32, None, now_iso, now_iso),
+                (str(uuid4()), 1, str(uuid4()), "c" * 64, run_id, str(uuid4()), "delivered", "live", None, "3" * 32, None, now_iso, now_iso),
             )
 
     tel_path = tmp_path / "telemetry.sqlite3"
@@ -524,6 +526,7 @@ def test_incompatible_scout_deliveries_schema_does_not_break_other_projections(t
                 (str(run_id), str(inv_id), "a" * 64),
             )
             # Create a drifted/incompatible scout_deliveries schema missing expected columns
+            conn.execute("DROP TABLE IF EXISTS scout_deliveries")
             conn.execute("CREATE TABLE scout_deliveries (delivery_id TEXT PRIMARY KEY, status TEXT NOT NULL)")
 
     repo = ScoutOperationalRepository(db_path, now=lambda: NOW)
