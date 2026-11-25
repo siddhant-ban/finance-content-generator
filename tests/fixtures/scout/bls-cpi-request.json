@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "run_id": "9d5f816a-05fb-579b-a8ad-c05ec57d3284",
+  "invocation_id": "85e1c073-85e6-5e91-819b-7a100b019587",
+  "window_start": "2025-09-11T00:00:00Z",
+  "window_end": "2025-09-12T00:00:00Z",
+  "topic_policy": {
+    "version": "v1",
+    "topics": [
+      "prices",
+      "jobs",
+      "borrowing"
+    ]
+  },
+  "fingerprints": {
+    "version": "v1",
+    "known": []
+  },
+  "configuration": {
+    "version": "v1",
+    "feed_snapshot": "009e3e220f92a802b1f162b4bc199237a74446af907a83f5ee315451d80f96dc",
+    "cluster_version": "v1",
+    "prompt_version": "v1",
+    "prompt_hash": "2975fb4d2312ed9a674fecd366aba2cec243ad81a69676f6587fef2dc05f9f5f",
+    "provider": "fake",
+    "model": "recorded-v1",
+    "temperature": 0.0
+  },
+  "release_id": "c1803e66-ffd1-556e-89e6-5aa4174b2b98",
+  "limits": {
+    "max_items": 5,
+    "max_tokens": 200,
+    "timeout_seconds": 10
+  }
+}

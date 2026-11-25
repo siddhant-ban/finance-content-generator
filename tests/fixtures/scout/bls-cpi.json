@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "feed": {
+    "items": {
+      "bls-cpi-2025-08": {
+        "headline": "Consumer Price Index - August 2025",
+        "source": {
+          "schema_version": "1.0",
+          "source_id": "a02b1838-471e-59fb-9a1a-c910110cef39",
+          "revision": 1,
+          "original_url": "https://www.bls.gov/news.release/archives/cpi_09112025.htm",
+          "canonical_url": "https://www.bls.gov/news.release/archives/cpi_09112025.htm",
+          "publisher": "U.S. Bureau of Labor Statistics",
+          "source_class": "primary",
+          "published_at": "2025-09-11T12:30:00Z",
+          "publication_time_reason": null,
+          "retrieved_at": "2026-11-25T01:30:22Z",
+          "locator": "Opening paragraph and Table A, all items",
+          "excerpt": "The all-items CPI-U rose 0.4 percent in August on a seasonally adjusted basis.",
+          "rights": "excerpt_permitted",
+          "usage_notes": "Public-domain BLS release text and data. See https://www.bls.gov/opub/copyright-information.htm.",
+          "content_hash": null
+        }
+      }
+    }
+  },
+  "responses": {
+    "https://www.bls.gov/news.release/archives/cpi_09112025.htm": {
+      "usage": {
+        "input_tokens": 80,
+        "output_tokens": 41
+      },
+      "output": {
+        "schema_version": "1.0",
+        "summary": [
+          {
+            "text": "BLS reported that the all-items Consumer Price Index rose 0.4 percent from July to August 2025 after seasonal adjustment.",
+            "sources": [
+              {
+                "source_id": "a02b1838-471e-59fb-9a1a-c910110cef39",
+                "source_revision": 1,
+                "source_record_hash": "bb2412fcf737283f02b8e15f1dc1b5031da00093b8f8e30d2718768c927a410d"
+              }
+            ]
+          }
+        ],
+        "topics": [
+          "prices"
+        ],
+        "entities": [
+          "Consumer Price Index",
+          "U.S. Bureau of Labor Statistics"
+        ],
+        "warnings": [
+          "seasonally_adjusted"
+        ]
+      }
+    }
+  }
+}
