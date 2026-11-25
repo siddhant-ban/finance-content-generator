@@ -4,9 +4,10 @@ from collections.abc import Callable, Mapping
 from contextvars import Context
 from dataclasses import dataclass
 import json
+import threading
 import time
 from typing import Literal, Protocol, TypedDict, cast
-from uuid import UUID, uuid5
+from uuid import UUID
 
 from langgraph.graph import END, START, StateGraph
 from langsmith.run_helpers import tracing_context
@@ -21,9 +22,30 @@ from app.contracts.scout import (
 )
 from app.observability.tracing import Telemetry
 from app.scout.cluster import cluster_items, combine_warnings
-from app.scout.workflow import deliver_candidate, record_story_revision, resolve_story_identity, scout_state
+from app.scout.delivery import (
+    ReplayInputSnapshot,
+    deliver_story_candidate,
+    load_replay_response,
+    load_saved_run_output,
+    record_replay_inputs,
+    record_run_lineage,
+    record_run_output,
+    recover_pending_deliveries,
+)
+from app.scout.workflow import resolve_story_identity, scout_state
 from app.storage.artifacts import ArtifactStore
-from app.workflow.state import StateConflict, StateService
+from app.workflow.state import StateService
+
+_ARTIFACT_WRITE_LOCKS_GUARD = threading.Lock()
+_ARTIFACT_WRITE_LOCKS: dict[str, threading.Lock] = {}
+
+
+def _put_artifact(store: ArtifactStore, data: bytes, media_type: str, schema_version: str) -> ArtifactRef:
+    key = str(store.root)
+    with _ARTIFACT_WRITE_LOCKS_GUARD:
+        lock = _ARTIFACT_WRITE_LOCKS.setdefault(key, threading.Lock())
+    with lock:
+        return store.put(data, media_type, schema_version)
 
 CLUSTER_NAMESPACE = UUID("cb0d6d66-f933-4ea8-b2e1-192ddcd38684")
 SOURCE_ORDER = {"primary": 0, "reputable_secondary": 1, "commentary": 2, "unknown": 3}
@@ -98,6 +120,31 @@ def _disposition(item_id: str, status: ItemStatus, reason: ItemReason,
     return ScoutItemDisposition(item_id=item_id, status=status, reason=reason, candidate_ref=ref)
 
 
+def _snapshot_rejected_item(item_order: int, item_id: str, payload: FeedPayload, reason: ItemReason) -> ReplayInputSnapshot:
+    try:
+        raw = payload if isinstance(payload, bytes) else json.dumps(payload)
+        item = ScoutFeedItem.model_validate_json(raw)
+        source = item.source
+        resolved_reason = "metadata_only_rights" if source.rights == "metadata_only" else reason
+        return ReplayInputSnapshot.unretained(
+            item_order=item_order,
+            item_id=item_id,
+            rights=source.rights,
+            retention_reason=resolved_reason,
+            source_id=source.source_id,
+            source_revision=source.revision,
+            source_record_hash=source.record_hash(),
+            canonical_url=source.canonical_url,
+        )
+    except (TypeError, ValueError):
+        return ReplayInputSnapshot.unretained(
+            item_order=item_order,
+            item_id=item_id,
+            rights="unparsed",
+            retention_reason=reason,
+        )
+
+
 def _eligible(payload: FeedPayload, request: ScoutRunInput) -> ScoutMember | ItemReason:
     try:
         raw = payload if isinstance(payload, bytes) else json.dumps(payload)
@@ -157,23 +204,49 @@ class _Run:
         expired = not self.remaining()
         dispositions: dict[str, ScoutItemDisposition] = {}
         eligible: dict[str, ScoutMember] = {}
+        replay_snapshots: list[ReplayInputSnapshot] = []
         for index, item_id in enumerate(batch):
             if index >= request.limits.max_items:
                 dispositions[item_id] = _disposition(item_id, "unprocessed", "item_limit")
+                replay_snapshots.append(
+                    ReplayInputSnapshot.unretained(
+                        item_order=index, item_id=item_id, rights="unparsed", retention_reason="item_limit",
+                    )
+                )
             elif expired or not self.remaining():
                 dispositions[item_id] = _disposition(item_id, "unprocessed", "time_limit")
+                replay_snapshots.append(
+                    ReplayInputSnapshot.unretained(
+                        item_order=index, item_id=item_id, rights="unparsed", retention_reason="time_limit",
+                    )
+                )
             elif isinstance(fetched, FeedBatch) and item_id in fetched.problems:
                 problem = fetched.problems[item_id]
                 dispositions[item_id] = _disposition(
                     item_id, "withheld" if problem == "duplicate_feed_item" else "failed", problem,
                 )
+                replay_snapshots.append(
+                    ReplayInputSnapshot.unretained(
+                        item_order=index, item_id=item_id, rights="unparsed", retention_reason=problem,
+                    )
+                )
             else:
                 member = _eligible(batch[item_id], request)
                 if isinstance(member, ScoutMember):
                     eligible[item_id] = member
+                    replay_snapshots.append(
+                        ReplayInputSnapshot.from_feed_item(
+                            item_order=index,
+                            item_id=item_id,
+                            item=ScoutFeedItem(headline=member.headline, source=member.source),
+                        )
+                    )
                 else:
                     status: ItemStatus = "failed" if member == "invalid_provenance" else "withheld"
                     dispositions[item_id] = _disposition(item_id, status, member)
+                    replay_snapshots.append(_snapshot_rejected_item(index, item_id, batch[item_id], member))
+        if replay_snapshots:
+            record_replay_inputs(self.store.conn, run_id=request.run_id, items=replay_snapshots)
         result: _GraphState = {
             "order": tuple(batch), "eligible": eligible, "dispositions": dispositions,
             "issue": "time_limit" if expired else None,
@@ -271,20 +344,27 @@ class _Run:
             target_revision = latest_revision
         else:
             target_revision = latest_revision + 1
-        try:
-            with self.telemetry.span("model.call", SCOUT_PROJECT, {
-                "run.id": request.run_id, "story.id": story_id, "model.parameters.max_tokens": max_tokens,
-                "source.count": len(sources), "retry.count": 0,
-            }) as span:
-                result = self.enrich(request, sources, max_tokens=max_tokens, timeout_seconds=timeout)
-                usage = ScoutTokenUsage.model_validate(result.usage.model_dump())
-                span.set_attributes({"usage.input_tokens": usage.input_tokens, "usage.output_tokens": usage.output_tokens})
-        except TokenBudgetExceeded:
-            return "unprocessed", "token_limit", None, zero
-        except TimeoutError:
-            return "unprocessed", "time_limit", None, None
-        except (OSError, ValueError):
-            return "failed", "model_unavailable", None, None
+        saved_response = load_replay_response(
+            self.store.conn, run_id=request.run_id, story_id=story_id, revision=target_revision,
+        )
+        if saved_response is not None and saved_response.fingerprint == fingerprint:
+            result = ModelResult(saved_response.response_json.encode("utf-8"), saved_response.usage)
+            usage = saved_response.usage
+        else:
+            try:
+                with self.telemetry.span("model.call", SCOUT_PROJECT, {
+                    "run.id": request.run_id, "story.id": story_id, "model.parameters.max_tokens": max_tokens,
+                    "source.count": len(sources), "retry.count": 0,
+                }) as span:
+                    result = self.enrich(request, sources, max_tokens=max_tokens, timeout_seconds=timeout)
+                    usage = ScoutTokenUsage.model_validate(result.usage.model_dump())
+                    span.set_attributes({"usage.input_tokens": usage.input_tokens, "usage.output_tokens": usage.output_tokens})
+            except TokenBudgetExceeded:
+                return "unprocessed", "token_limit", None, zero
+            except TimeoutError:
+                return "unprocessed", "time_limit", None, None
+            except (OSError, ValueError):
+                return "failed", "model_unavailable", None, None
         if usage.total > max_tokens:
             return "failed", "model_token_overrun", None, usage
         if not self.remaining():
@@ -304,40 +384,52 @@ class _Run:
         if not set(candidate.topics) <= set(request.topic_policy.topics):
             return "withheld", "outside_topic_policy", None, usage
 
-        if not self.remaining():
-            return "unprocessed", "time_limit", None, usage
-        ref = self.store.put(candidate.canonical_bytes(), "application/json", candidate.schema_version)
-        if not self.remaining():
-            return "unprocessed", "time_limit", None, usage
-        with self.telemetry.span("workflow.transition", SCOUT_PROJECT, {
-            "run.id": request.run_id, "story.id": story_id, "artifact.hash": ref.sha256,
-        }):
-            try:
-                delivery_status = deliver_candidate(self.workflow, candidate, ref, request.run_id, self.trace_id)
-                record_story_revision(
+        for _ in range(5):
+            if not self.remaining():
+                return "unprocessed", "time_limit", None, usage
+            ref = _put_artifact(self.store, candidate.canonical_bytes(), "application/json", candidate.schema_version)
+            if not self.remaining():
+                return "unprocessed", "time_limit", None, usage
+            with self.telemetry.span("workflow.transition", SCOUT_PROJECT, {
+                "run.id": request.run_id, "story.id": story_id, "artifact.hash": ref.sha256,
+            }):
+                outcome = deliver_story_candidate(
                     self.store,
+                    self.workflow,
+                    request=request,
                     candidate=candidate,
                     ref=ref,
-                    run_id=request.run_id,
                     cluster_key=key,
-                    cluster_version=request.configuration.cluster_version,
-                    reason_code="candidate_created" if candidate.revision == 1 else "source_correction",
+                    trace_id=self.trace_id,
+                    response_bytes=result.output,
+                    usage=usage,
                 )
-            except StateConflict:
+            if not outcome.retry_with_next_revision:
+                return outcome.status, outcome.reason, outcome.candidate_ref, usage
+            story_id, cluster_id, latest_revision, latest_fingerprint, conflict = resolve_story_identity(
+                self.store.conn, sources, key, request.configuration.cluster_version, CLUSTER_NAMESPACE,
+            )
+            if conflict:
                 return "failed", "revision_conflict", None, usage
-        if delivery_status == "new":
-            return "new", "candidate_created", ref, usage
-        if delivery_status == "updated":
-            return "updated", "candidate_created", ref, usage
-        return "unchanged", "already_delivered", ref, usage
+            next_revision = 1 if latest_revision == 0 else (
+                latest_revision if latest_fingerprint == fingerprint else latest_revision + 1
+            )
+            candidate = StoryCandidate(
+                **(enrichment.model_dump() | {"warnings": warnings}),
+                schema_id=SCOUT_SCHEMA, kind="editorial",
+                story_id=story_id, cluster_id=cluster_id, revision=next_revision, fingerprint=fingerprint,
+                representative=sources[0].ref, members=sources,
+            )
+        return "failed", "revision_conflict", None, usage
 
 
 def _pin_request(store: ArtifactStore, request: ScoutRunInput) -> ArtifactRef:
     if store.conn.in_transaction:
         raise ValueError("Scout requires an idle journal connection")
-    ref = store.put(request.canonical_bytes(), "application/json", request.schema_version)
+    ref = _put_artifact(store, request.canonical_bytes(), "application/json", request.schema_version)
     identity = (str(request.run_id), str(request.invocation_id), ref.sha256)
-    with store.conn:
+    store.conn.execute("BEGIN IMMEDIATE")
+    try:
         store.conn.execute(
             "INSERT INTO scout_run_requests(run_id, invocation_id, input_sha256) VALUES (?, ?, ?) "
             "ON CONFLICT DO NOTHING", identity,
@@ -348,6 +440,10 @@ def _pin_request(store: ArtifactStore, request: ScoutRunInput) -> ArtifactRef:
         ).fetchone()
         if row is None or tuple(row) != identity:
             raise ScoutRequestConflict("Scout run or invocation identity is already bound to another request")
+        store.conn.commit()
+    except BaseException:
+        store.conn.rollback()
+        raise
     return ref
 
 
@@ -359,6 +455,12 @@ def run_scout(
     request = ScoutRunInput.model_validate(request.model_dump())
     deadline = clock() + request.limits.timeout_seconds
     input_ref = _pin_request(store, request)
+    saved_output = load_saved_run_output(store, request.run_id)
+    if saved_output is not None:
+        recover_pending_deliveries(store, run_id=request.run_id)
+        if saved_output.input_ref != input_ref:
+            raise ScoutRequestConflict("Saved Scout output does not match pinned input")
+        return saved_output
     config = request.configuration
     with telemetry.span("agent.invoke", SCOUT_PROJECT, {
         "run.id": request.run_id, "invocation.id": request.invocation_id, "agent.name": "news_scout",
@@ -369,6 +471,21 @@ def run_scout(
         "retry.count": 0,
     }) as span:
         trace_id = f"{span.get_span_context().trace_id:032x}"
+        record_run_lineage(
+            store.conn,
+            run_id=request.run_id,
+            invocation_id=request.invocation_id,
+            replay_mode="live",
+            source_run_id=None,
+            source_input_sha256=None,
+            input_sha256=input_ref.sha256,
+            config_hash=config.record_hash(),
+            prompt_hash=config.prompt_hash,
+            provider=config.provider,
+            model=config.model,
+            experiment_id=None,
+            trace_id=trace_id,
+        )
         worker = _Run(request, store, scout_state(store), telemetry, fetch, cluster, enrich,
                       trace_id, deadline, clock)
         graph = StateGraph(_GraphState)
@@ -404,7 +521,8 @@ def run_scout(
             candidates=tuple(dict.fromkeys(item.candidate_ref for item in items if item.candidate_ref)),
             items=items, issue=issue, reported_tokens=result["tokens"], feeds=feeds,
         )
-        output_ref = store.put(output.canonical_bytes(), "application/json", "1.0")
+        output_ref = _put_artifact(store, output.canonical_bytes(), "application/json", "1.0")
+        record_run_output(store.conn, run_id=request.run_id, output_sha256=output_ref.sha256, outcome=output.outcome)
         status = {"failed": "FAILED", "partial": "BLOCKED"}.get(output.outcome, "OK")
         span.set_attributes({"output.ref": output_ref.sha256, "result.status": status})
         return output
