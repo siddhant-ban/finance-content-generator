@@ -3,6 +3,7 @@ import json
 from collections.abc import Callable
 from datetime import datetime
 from typing import Literal
+from uuid import UUID
 from app.contracts.common import StrictModel, Nonempty, UtcDatetime, ArtifactRef
 from app.contracts.evidence import (ClaimRevision, SourceRecord, VerificationRecord, ClaimUse,
                                     validate_evidence, validate_claim_uses)
@@ -23,6 +24,8 @@ class AssetLicense(StrictModel):
 class ArtifactValidation(StrictModel):
     kind: Literal['synthetic_foundation','editorial'] | None = None
     report: PolicyReport
+    # Some discovery producers use one typed artifact for both checkpoints.
+    discovery_story_id: UUID | None = None
     decision: Literal['ADVANCE','HOLD','REJECT'] | None = None
     eligible: bool = False
     claims: tuple[ClaimRevision,...] = ()

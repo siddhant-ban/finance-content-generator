@@ -133,7 +133,9 @@ class StateService:
             replay=self._receipt(caller_scope,'create',idempotency_key,fingerprint)
             if replay is not None: self.conn.commit(); return replay
             if expected_version!=0 or self.conn.execute('SELECT 1 FROM stories WHERE story_id=?',(str(story_id),)).fetchone(): raise StateConflict('create requires absent story and version zero')
-            self._valid('candidate',candidate)
+            validated=self._valid('candidate',candidate)
+            if validated.discovery_story_id not in (None,story_id):
+                raise PolicyDenied('candidate belongs to a different story')
             snapshot=StorySnapshot(story_id=story_id,run_id=run_id,state=StoryState.DISCOVERED,version=1,artifacts={'candidate':candidate})
             result=self._save(snapshot,None,caller_scope,'create',idempotency_key,fingerprint,'candidate_created')
             self.conn.commit(); return result
@@ -146,8 +148,13 @@ class StateService:
         candidate=self._valid('candidate',artifacts['candidate'])
         return {stage:self._valid(stage,ref,kind=candidate.kind) for stage,ref in artifacts.items()}
 
-    def _stage_safety(self,target,artifacts):
+    def _stage_safety(self,target,artifacts,story_id):
         values=self._revalidate_retained(artifacts)
+        if any(value.discovery_story_id is not None for value in values.values()):
+            if values['candidate'].discovery_story_id!=story_id:
+                raise PolicyDenied('discovery artifact belongs to a different story')
+            if 'cluster' in artifacts and artifacts['cluster']!=artifacts['candidate']:
+                raise PolicyDenied('discovery checkpoints require the same artifact')
         if target==StoryState.RESEARCHED:
             score=values.get('score')
             if score is None or score.decision!='ADVANCE' or not score.eligible: raise PolicyDenied('research requires eligible ADVANCE')
@@ -206,7 +213,7 @@ class StateService:
                     self._valid(STAGE_FOR[target],request.artifact,kind=kind)
                     artifacts[STAGE_FOR[target]]=request.artifact
                 artifacts=self._retain(artifacts,target)
-                self._stage_safety(target,artifacts)
+                self._stage_safety(target,artifacts,old.story_id)
             elif target==StoryState.AWAITING_APPROVAL:
                 manifest=request.manifest
                 if manifest is None or manifest.story_id!=old.story_id or manifest.kind!=self._valid('candidate',artifacts['candidate']).kind or not self.policy.evaluate_readiness(manifest,self.clock()).ready: raise PolicyDenied('manifest not ready')
@@ -218,7 +225,7 @@ class StateService:
                 stage=STAGE_FOR[target]
                 if request.artifact is None: raise PolicyDenied('stage artifact required')
                 artifacts[stage]=request.artifact
-                self._stage_safety(target,artifacts)
+                self._stage_safety(target,artifacts,old.story_id)
             result=old.model_copy(update=dict(state=target,version=old.version+1,artifacts=artifacts,manifest=manifest,manifest_hash=manifest_hash,approval_id=None,resume_target=resume,failed_stage=failed,reason_code=request.reason_code))
             self._save(result,old,request.caller_scope,'transition',request.idempotency_key,fingerprint,request.reason_code,request.trace_id)
             self.conn.commit(); return result

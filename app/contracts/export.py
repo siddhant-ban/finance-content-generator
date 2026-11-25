@@ -2,7 +2,7 @@
 import argparse
 import json
 from pathlib import Path
-from app.contracts import common, execution, evidence, workflow
+from app.contracts import common, execution, evidence, scout, workflow
 from app.evals import models as evaluations
 from app.execution import protocols
 from app.workflow import state
@@ -12,6 +12,8 @@ from app.release import models as releases
 from app.review.service import HumanDecision
 
 GROUPS = {
+    "scout.json": (scout.ScoutRunInput, scout.ScoutRunOutput, scout.ScoutFeedItem, scout.ScoutEnrichment,
+                   scout.StoryCandidate),
     "releases.json": (releases.ReleasePolicy,releases.EvidencePin,releases.ReleaseCandidate,
                       releases.GateDecision,releases.ReleaseApproval,releases.FeedbackAnnotation,
                       releases.FeedbackCandidate),
