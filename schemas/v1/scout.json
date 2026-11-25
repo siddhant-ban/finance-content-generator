@@ -533,6 +533,70 @@
           "title": "ArtifactRef",
           "type": "object"
         },
+        "ScoutFeedPoll": {
+          "additionalProperties": false,
+          "properties": {
+            "feed_id": {
+              "minLength": 1,
+              "title": "Feed Id",
+              "type": "string"
+            },
+            "item_ids": {
+              "default": [],
+              "items": {
+                "minLength": 1,
+                "type": "string"
+              },
+              "title": "Item Ids",
+              "type": "array"
+            },
+            "reason": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "http_error",
+                    "timeout",
+                    "transport_error",
+                    "invalid_rss",
+                    "missing_cache",
+                    "body_limit",
+                    "feed_limit",
+                    "time_limit",
+                    "unsupported_encoding"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Reason"
+            },
+            "revision": {
+              "minimum": 1,
+              "title": "Revision",
+              "type": "integer"
+            },
+            "status": {
+              "enum": [
+                "read",
+                "not_modified",
+                "unavailable",
+                "limited"
+              ],
+              "title": "Status",
+              "type": "string"
+            }
+          },
+          "required": [
+            "feed_id",
+            "revision",
+            "status"
+          ],
+          "title": "ScoutFeedPoll",
+          "type": "object"
+        },
         "ScoutItemDisposition": {
           "additionalProperties": false,
           "properties": {
@@ -569,7 +633,9 @@
                 "revision_conflict",
                 "item_limit",
                 "token_limit",
-                "time_limit"
+                "time_limit",
+                "malformed_feed_item",
+                "duplicate_feed_item"
               ],
               "title": "Reason",
               "type": "string"
@@ -626,6 +692,21 @@
           "title": "Candidates",
           "type": "array"
         },
+        "feeds": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ScoutFeedPoll"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feeds"
+        },
         "input_ref": {
           "$ref": "#/$defs/ArtifactRef"
         },
@@ -678,7 +759,10 @@
           "type": "string"
         },
         "schema_version": {
-          "const": "1.0",
+          "enum": [
+            "1.0",
+            "1.1"
+          ],
           "title": "Schema Version",
           "type": "string"
         },

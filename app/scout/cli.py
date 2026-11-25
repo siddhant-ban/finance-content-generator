@@ -13,6 +13,7 @@ from app.contracts.scout import (
     ScoutTokenUsage, StoryCandidate,
 )
 from app.observability.tracing import Telemetry
+from app.scout.feed_cli import add_feed_commands, manage_feeds
 from app.scout.run import FeedPayload, ModelResult, ScoutRequestConflict, TokenBudgetExceeded, run_scout
 from app.storage.artifacts import ArtifactStore
 from app.storage.db import migrate, open_database
@@ -55,6 +56,13 @@ def format_result(report: ScoutRunOutput, store: ArtifactStore) -> str:
     lines = [f"Scout run {report.run_id}  {report.outcome}", f"Trace {report.trace_id}"]
     if report.issue:
         lines.append(f"Run issue  {report.issue}")
+    if report.feeds is not None:
+        for feed in report.feeds:
+            if feed.status in {"read", "not_modified"}:
+                detail = f"{len(feed.item_ids)} items" if feed.item_ids else "quiet"
+            else:
+                detail = feed.reason or feed.status
+            lines.append(f"Feed {_display(feed.feed_id)} r{feed.revision}  {feed.status} ({detail})")
     lines += [f"{_display(item.item_id)}  {item.status} ({item.reason})" for item in report.items]
     for ref in report.candidates:
         candidate = StoryCandidate.model_validate_json(store.read(ref))
@@ -91,11 +99,17 @@ def format_result(report: ScoutRunOutput, store: ArtifactStore) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
+    add_feed_commands(commands.add_parser("feeds"))
     run = commands.add_parser("run")
     run.add_argument("--request", type=Path, required=True, help="ScoutRunInput JSON with an explicit UTC window")
     run.add_argument("--recording", type=Path, required=True, help="Versioned feed and model recording JSON")
     run.add_argument("--output", type=Path, required=True, help="Local SQLite, artifact and report directory")
     args = parser.parse_args(argv)
+    if args.command == "feeds":
+        try:
+            return manage_feeds(args)
+        except ValueError as error:
+            parser.error(str(error))
 
     try:
         request = ScoutRunInput.model_validate_json(args.request.read_bytes())
