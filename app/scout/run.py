@@ -20,7 +20,8 @@ from app.contracts.scout import (
     ScoutTokenUsage, StoryCandidate, candidate_fingerprint, run_outcome, source_ref,
 )
 from app.observability.tracing import Telemetry
-from app.scout.workflow import deliver_candidate, scout_state
+from app.scout.cluster import cluster_items, combine_warnings
+from app.scout.workflow import deliver_candidate, record_story_revision, resolve_story_identity, scout_state
 from app.storage.artifacts import ArtifactStore
 from app.workflow.state import StateConflict, StateService
 
@@ -237,8 +238,17 @@ class _Run:
         timeout = self.remaining()
         if not timeout:
             return "unprocessed", "time_limit", None, zero
-        cluster_id = uuid5(CLUSTER_NAMESPACE, request.configuration.cluster_version + "\n" + key)
-        story_id = uuid5(cluster_id, "story")
+        story_id, cluster_id, latest_revision, latest_fingerprint, conflict = resolve_story_identity(
+            self.store.conn, sources, key, request.configuration.cluster_version, CLUSTER_NAMESPACE,
+        )
+        if conflict:
+            return "failed", "revision_conflict", None, zero
+        if latest_revision == 0:
+            target_revision = 1
+        elif latest_fingerprint == fingerprint:
+            target_revision = latest_revision
+        else:
+            target_revision = latest_revision + 1
         try:
             with self.telemetry.span("model.call", SCOUT_PROJECT, {
                 "run.id": request.run_id, "story.id": story_id, "model.parameters.max_tokens": max_tokens,
@@ -260,9 +270,11 @@ class _Run:
 
         try:
             enrichment = ScoutEnrichment.model_validate_json(result.output)
+            warnings = combine_warnings(enrichment.warnings, sources)
             candidate = StoryCandidate(
-                **enrichment.model_dump(), schema_id=SCOUT_SCHEMA, kind="editorial",
-                story_id=story_id, cluster_id=cluster_id, revision=1, fingerprint=fingerprint,
+                **(enrichment.model_dump() | {"warnings": warnings}),
+                schema_id=SCOUT_SCHEMA, kind="editorial",
+                story_id=story_id, cluster_id=cluster_id, revision=target_revision, fingerprint=fingerprint,
                 representative=sources[0].ref, members=sources,
             )
         except ValidationError:
@@ -279,10 +291,23 @@ class _Run:
             "run.id": request.run_id, "story.id": story_id, "artifact.hash": ref.sha256,
         }):
             try:
-                created = deliver_candidate(self.workflow, candidate, ref, request.run_id, self.trace_id)
+                delivery_status = deliver_candidate(self.workflow, candidate, ref, request.run_id, self.trace_id)
+                record_story_revision(
+                    self.store,
+                    candidate=candidate,
+                    ref=ref,
+                    run_id=request.run_id,
+                    cluster_key=key,
+                    cluster_version=request.configuration.cluster_version,
+                    reason_code="candidate_created" if candidate.revision == 1 else "source_correction",
+                )
             except StateConflict:
                 return "failed", "revision_conflict", None, usage
-        return ("new", "candidate_created", ref, usage) if created else ("unchanged", "already_delivered", ref, usage)
+        if delivery_status == "new":
+            return "new", "candidate_created", ref, usage
+        if delivery_status == "updated":
+            return "updated", "candidate_created", ref, usage
+        return "unchanged", "already_delivered", ref, usage
 
 
 def _pin_request(store: ArtifactStore, request: ScoutRunInput) -> ArtifactRef:
@@ -306,7 +331,7 @@ def _pin_request(store: ArtifactStore, request: ScoutRunInput) -> ArtifactRef:
 
 def run_scout(
     request: ScoutRunInput, *, store: ArtifactStore, telemetry: Telemetry, fetch: FeedTransport,
-    enrich: Enricher, cluster: Clusterer = exact_clusters, clock: Callable[[], float] = time.monotonic,
+    enrich: Enricher, cluster: Clusterer = cluster_items, clock: Callable[[], float] = time.monotonic,
 ) -> ScoutRunOutput:
     """Persist frozen inputs, run the discovery graph, and persist its batch envelope."""
     request = ScoutRunInput.model_validate(request.model_dump())

@@ -26,6 +26,7 @@ class ArtifactValidation(StrictModel):
     report: PolicyReport
     # Some discovery producers use one typed artifact for both checkpoints.
     discovery_story_id: UUID | None = None
+    discovery_revision: int | None = None
     decision: Literal['ADVANCE','HOLD','REJECT'] | None = None
     eligible: bool = False
     claims: tuple[ClaimRevision,...] = ()
