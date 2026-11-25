@@ -16,7 +16,7 @@ from pydantic import JsonValue, ValidationError
 from app.contracts.common import ArtifactRef
 from app.contracts.scout import (
     SCOUT_PROJECT, SCOUT_SCHEMA, ItemReason, ItemStatus, RunIssue, ScoutEnrichment,
-    ScoutFeedItem, ScoutItemDisposition, ScoutMember, ScoutRunInput, ScoutRunOutput,
+    ScoutFeedItem, ScoutFeedPoll, ScoutItemDisposition, ScoutMember, ScoutRunInput, ScoutRunOutput,
     ScoutTokenUsage, StoryCandidate, candidate_fingerprint, run_outcome, source_ref,
 )
 from app.observability.tracing import Telemetry
@@ -33,9 +33,19 @@ class ScoutRequestConflict(ValueError):
     """A run or invocation identity is already bound to a different request."""
 
 
+FeedItemProblem = Literal["malformed_feed_item", "duplicate_feed_item"]
+
+
+@dataclass(frozen=True)
+class FeedBatch:
+    items: Mapping[str, FeedPayload]
+    polls: tuple[ScoutFeedPoll, ...]
+    problems: Mapping[str, FeedItemProblem]
+
+
 class FeedTransport(Protocol):
-    def __call__(self, request: ScoutRunInput, *, timeout_seconds: float) -> Mapping[str, FeedPayload]:
-        """Return a finite batch of item IDs and raw normalized item JSON."""
+    def __call__(self, request: ScoutRunInput, *, timeout_seconds: float) -> Mapping[str, FeedPayload] | FeedBatch:
+        """Return normalized items and optional registry poll accounting."""
         ...
 
 
@@ -79,6 +89,7 @@ class _GraphState(TypedDict, total=False):
     dispositions: dict[str, ScoutItemDisposition]
     issue: RunIssue | None
     tokens: ScoutTokenUsage
+    feeds: tuple[ScoutFeedPoll, ...]
 
 
 def _disposition(item_id: str, status: ItemStatus, reason: ItemReason,
@@ -132,7 +143,8 @@ class _Run:
             with self.telemetry.span("tool.call", SCOUT_PROJECT, {
                 "run.id": request.run_id, "tool.ref": request.configuration.feed_snapshot,
             }) as span:
-                batch = self.fetch(request, timeout_seconds=timeout)
+                fetched = self.fetch(request, timeout_seconds=timeout)
+                batch = fetched.items if isinstance(fetched, FeedBatch) else fetched
                 span.set_attribute("source.count", len(batch))
         except TimeoutError:
             return {"issue": "time_limit"}
@@ -149,6 +161,11 @@ class _Run:
                 dispositions[item_id] = _disposition(item_id, "unprocessed", "item_limit")
             elif expired or not self.remaining():
                 dispositions[item_id] = _disposition(item_id, "unprocessed", "time_limit")
+            elif isinstance(fetched, FeedBatch) and item_id in fetched.problems:
+                problem = fetched.problems[item_id]
+                dispositions[item_id] = _disposition(
+                    item_id, "withheld" if problem == "duplicate_feed_item" else "failed", problem,
+                )
             else:
                 member = _eligible(batch[item_id], request)
                 if isinstance(member, ScoutMember):
@@ -156,8 +173,13 @@ class _Run:
                 else:
                     status: ItemStatus = "failed" if member == "invalid_provenance" else "withheld"
                     dispositions[item_id] = _disposition(item_id, status, member)
-        return {"order": tuple(batch), "eligible": eligible, "dispositions": dispositions,
-                "issue": "time_limit" if expired else None}
+        result: _GraphState = {
+            "order": tuple(batch), "eligible": eligible, "dispositions": dispositions,
+            "issue": "time_limit" if expired else None,
+        }
+        if isinstance(fetched, FeedBatch):
+            result["feeds"] = fetched.polls
+        return result
 
     def group_items(self, state: _GraphState) -> _GraphState:
         eligible = state.get("eligible", {})
@@ -349,13 +371,15 @@ def run_scout(
             raise RuntimeError("Scout graph ended before finalizing its report")
         items = tuple(result["dispositions"][key] for key in result.get("order", ()))
         issue = result.get("issue")
+        feeds = result.get("feeds")
         output = ScoutRunOutput(
-            schema_version="1.0", run_id=request.run_id, invocation_id=request.invocation_id,
-            input_ref=input_ref, trace_id=trace_id, outcome=run_outcome(items, issue),
+            schema_version="1.0" if feeds is None else "1.1",
+            run_id=request.run_id, invocation_id=request.invocation_id,
+            input_ref=input_ref, trace_id=trace_id, outcome=run_outcome(items, issue, feeds),
             candidates=tuple(dict.fromkeys(item.candidate_ref for item in items if item.candidate_ref)),
-            items=items, issue=issue, reported_tokens=result["tokens"],
+            items=items, issue=issue, reported_tokens=result["tokens"], feeds=feeds,
         )
-        output_ref = store.put(output.canonical_bytes(), "application/json", output.schema_version)
+        output_ref = store.put(output.canonical_bytes(), "application/json", "1.0")
         status = {"failed": "FAILED", "partial": "BLOCKED"}.get(output.outcome, "OK")
         span.set_attributes({"output.ref": output_ref.sha256, "result.status": status})
         return output

@@ -3,7 +3,7 @@ from hashlib import sha256
 from typing import Annotated, Literal
 from uuid import UUID, uuid5
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, StringConstraints, model_serializer, model_validator
 
 from app.contracts.common import ArtifactRef, Nonempty, Sha256, StrictModel, UtcDatetime
 from app.contracts.evidence import EvidenceRef, Revision, SourceRecord
@@ -154,6 +154,7 @@ ItemReason = Literal[
     "outside_window", "unknown_rights", "invalid_provenance", "outside_topic_policy",
     "invalid_enrichment", "model_unavailable", "model_token_overrun", "cluster_failed",
     "revision_conflict", "item_limit", "token_limit", "time_limit",
+    "malformed_feed_item", "duplicate_feed_item",
 ]
 RunIssue = Literal["feed_unavailable", "invalid_feed_batch", "cluster_failed", "time_limit"]
 
@@ -173,6 +174,29 @@ class ScoutItemDisposition(StrictModel):
         return self
 
 
+FeedPollReason = Literal[
+    "http_error", "timeout", "transport_error", "invalid_rss", "missing_cache",
+    "body_limit", "feed_limit", "time_limit", "unsupported_encoding",
+]
+
+
+class ScoutFeedPoll(StrictModel):
+    feed_id: Nonempty
+    revision: Revision
+    status: Literal["read", "not_modified", "unavailable", "limited"]
+    reason: FeedPollReason | None = None
+    item_ids: tuple[Nonempty, ...] = ()
+
+    @model_validator(mode="after")
+    def accounted_poll(self):
+        if self.status in {"read", "not_modified"}:
+            if self.reason is not None:
+                raise ValueError("a successful poll cannot report a failure reason")
+        elif self.reason is None or self.item_ids:
+            raise ValueError("an unread feed requires a reason and cannot report items")
+        return self
+
+
 class ScoutTokenUsage(StrictModel):
     input_tokens: Annotated[int, Field(ge=0)]
     output_tokens: Annotated[int, Field(ge=0)]
@@ -182,9 +206,16 @@ class ScoutTokenUsage(StrictModel):
         return self.input_tokens + self.output_tokens
 
 
-def run_outcome(items: tuple[ScoutItemDisposition, ...], issue: RunIssue | None) -> Literal[
+def run_outcome(items: tuple[ScoutItemDisposition, ...], issue: RunIssue | None,
+                feeds: tuple[ScoutFeedPoll, ...] | None = None) -> Literal[
     "complete", "empty", "partial", "failed"
 ]:
+    if feeds:
+        poll_statuses = {feed.status for feed in feeds}
+        if poll_statuses == {"unavailable"}:
+            return "failed"
+        if poll_statuses & {"unavailable", "limited"}:
+            return "partial"
     statuses = {item.status for item in items}
     if statuses & {"failed", "unprocessed"} or issue is not None:
         if statuses - {"failed"} or issue == "time_limit":
@@ -194,7 +225,7 @@ def run_outcome(items: tuple[ScoutItemDisposition, ...], issue: RunIssue | None)
 
 
 class ScoutRunOutput(StrictModel):
-    schema_version: Literal["1.0"]
+    schema_version: Literal["1.0", "1.1"]
     run_id: UUID
     invocation_id: UUID
     input_ref: ArtifactRef
@@ -204,6 +235,14 @@ class ScoutRunOutput(StrictModel):
     items: tuple[ScoutItemDisposition, ...]
     reported_tokens: ScoutTokenUsage
     issue: RunIssue | None = None
+    feeds: tuple[ScoutFeedPoll, ...] | None = None
+
+    @model_serializer(mode="wrap")
+    def report_fields(self, serialize):
+        payload = serialize(self)
+        if self.schema_version == "1.0":
+            payload.pop("feeds", None)
+        return payload
 
     @model_validator(mode="after")
     def accounted_items(self):
@@ -213,6 +252,13 @@ class ScoutRunOutput(StrictModel):
         candidates = {ref.canonical_bytes() for ref in self.candidates}
         if reported != candidates or len(candidates) != len(self.candidates):
             raise ValueError("candidate list must match the ingestion report")
-        if self.outcome != run_outcome(self.items, self.issue):
+        if (self.schema_version == "1.1") != (self.feeds is not None):
+            raise ValueError("feed poll accounting requires Scout report version 1.1")
+        if self.feeds is not None:
+            feed_ids = {feed.feed_id for feed in self.feeds}
+            polled = [item_id for feed in self.feeds for item_id in feed.item_ids]
+            if len(feed_ids) != len(self.feeds) or sorted(polled) != sorted(item.item_id for item in self.items):
+                raise ValueError("feed polls must account for each item exactly once")
+        if self.outcome != run_outcome(self.items, self.issue, self.feeds):
             raise ValueError("outcome must match the ingestion report")
         return self
