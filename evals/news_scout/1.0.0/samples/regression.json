@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "1.0.0",
+  "dataset_manifest_sha256": "d91f0bd278f2ba34a2d5ff4b3c4e3ad196c6405a69b03477c7ff62095e6d1815",
+  "evaluator_version": "1.0.0",
+  "split": "prod_regression",
+  "prompt_version": "authored-fixture/1",
+  "model_id": "scout-authored-sample",
+  "outputs": {
+    "regression-syndication": {
+      "observations": [
+        {
+          "source": {
+            "source_id": "regression-syndication-issuer",
+            "revision": 1,
+            "url": "https://scout-fixtures.invalid/regression-syndication-issuer",
+            "publisher": "Synthetic bulletin archive",
+            "source_class": "primary",
+            "published_at": "2026-02-02T13:00:00Z",
+            "retrieved_at": "2026-02-02T15:00:00Z",
+            "locator": "Authored bulletin regression-syndication-issuer, paragraph 1",
+            "excerpt": null,
+            "fingerprint": "7f00b5cd228bb4bc30f61175ba623a687ca3e6fd19fa4b6d3a424b61587bcec7"
+          },
+          "disposition": "candidate"
+        },
+        {
+          "source": {
+            "source_id": "regression-syndication-copy",
+            "revision": 1,
+            "url": "https://scout-fixtures.invalid/regression-syndication-copy",
+            "publisher": "Synthetic wire archive",
+            "source_class": "secondary",
+            "published_at": "2026-02-02T13:00:00Z",
+            "retrieved_at": "2026-02-02T15:00:00Z",
+            "locator": "Authored bulletin regression-syndication-copy, paragraph 1",
+            "excerpt": null,
+            "fingerprint": "c38907a198ff449621358eec8a31f2d0df14bf5a21f91f169a7e3be9eebb78ca"
+          },
+          "disposition": "candidate"
+        }
+      ],
+      "candidates": [
+        {
+          "story_id": "borrowing-overlap-regression",
+          "revision": 1,
+          "representative": {
+            "source_id": "regression-syndication-issuer",
+            "revision": 1,
+            "sha256": "67e58b9364f9c46bd43b149cde17235474ff8ce9e86de564cf5b578a55c578dd"
+          },
+          "members": [
+            {
+              "source_id": "regression-syndication-issuer",
+              "revision": 1,
+              "sha256": "67e58b9364f9c46bd43b149cde17235474ff8ce9e86de564cf5b578a55c578dd"
+            },
+            {
+              "source_id": "regression-syndication-copy",
+              "revision": 1,
+              "sha256": "5baa8b20f93a7b8a739f43c767531fa1585bd7f32b0d89bebdcabbfe3b3b6482"
+            }
+          ],
+          "claims": [
+            {
+              "text": "The synthetic bulletin reported unchanged borrowing costs.",
+              "source_ids": [
+                "regression-syndication-issuer",
+                "regression-syndication-copy"
+              ]
+            }
+          ],
+          "entities": [
+            "Synthetic survey office"
+          ],
+          "topics": [
+            "borrowing"
+          ],
+          "warnings": []
+        }
+      ],
+      "outcome": "complete"
+    }
+  }
+}

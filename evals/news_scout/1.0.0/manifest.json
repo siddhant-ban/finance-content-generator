@@ -1,0 +1,13 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "1.0.0",
+  "evaluator_version": "1.0.0",
+  "agent": "news_scout",
+  "kind": "authored_fixture",
+  "dev_sha256": "9db9b1878a617adf348d8c63adffe388db391cfac4dee344f88f0b60d9672e58",
+  "prod_regression_sha256": "98bca19deabc215d4ab1e312affaaca58941fcd76b49d7412e165d9ee0459bdc",
+  "policy_sha256": "71f2315419fc75d3cffbf0aa80efad59db62286dc39d70ade32a8070d012c923",
+  "holdout": {
+    "status": "reserved"
+  }
+}

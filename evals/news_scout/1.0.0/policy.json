@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "policy_version": "1.0.0",
+  "rubric_floors": {
+    "audience_relevance": 0.9,
+    "summary_fidelity": 0.95,
+    "entity_extraction": 0.8,
+    "uncertainty": 0.9
+  },
+  "regression_tolerances": {
+    "audience_relevance": 0.05,
+    "summary_fidelity": 0.02,
+    "entity_extraction": 0.1,
+    "uncertainty": 0.05,
+    "duplicate_precision": 0.0,
+    "duplicate_recall": 0.05
+  },
+  "calibration_min_examples": 3,
+  "calibration_max_mean_error": 0.15
+}

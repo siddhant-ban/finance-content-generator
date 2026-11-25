@@ -15,6 +15,8 @@ Every agent uses the same lifecycle, with agent-specific metrics and thresholds.
 
 Use code-based evaluators wherever possible. LLM-as-judge is a secondary signal for subjective dimensions and must be calibrated against human labels.
 
+The [offline News Scout evaluator](SCOUT_EVALUATIONS.md) scores saved Scout outputs and records the status of editor calibration and the holdout.
+
 ## 2. Golden dataset creation workflow
 
 ### A. Collect candidate examples
