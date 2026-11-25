@@ -351,6 +351,10 @@ def test_publisher_correction_preserves_rev1_records_history_and_reworks_state(e
     assert len(story_revisions(store, cand_v1.story_id)) == 2
 
     # Editor can inspect BOTH revision 1 and revision 2 via format_result, format_history, and CLI.
+    run1_view = format_result(run1, store)
+    assert "Prior revisions" not in run1_view
+    assert run1_view.count("Revision 1") == 1
+
     report_view = format_result(run2, store)
     assert "Revision 1" in report_view
     assert "Revision 2" in report_view

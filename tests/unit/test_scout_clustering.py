@@ -223,7 +223,36 @@ def test_deterministic_conflicting_sources_detection():
         published_at=pub + timedelta(minutes=20),
         excerpt="Consumer prices increased 0.4% in August.",
     )
+    agree_hl_a = _member(
+        headline="CPI rose 0.4% in August 2025",
+        canonical_url="https://www.bls.gov/news.release/archives/cpi_09112025.htm",
+        published_at=pub,
+    )
     assert detect_conflicting_sources((agree_a, agree_b)) is False
+    assert detect_conflicting_sources((agree_hl_a, agree_b)) is False
+
+    bps_agree_a = _member(
+        headline="Federal Reserve cuts interest rates by 25 bps",
+        canonical_url="https://federalreserve.example.com/fomc-cut",
+        published_at=pub,
+    )
+    bps_agree_b = _member(
+        headline="Fed lowers benchmark rate by 25 basis points",
+        canonical_url="https://news.example.com/fomc-cut",
+        publisher="News Wire",
+        source_class="reputable_secondary",
+        published_at=pub + timedelta(minutes=5),
+    )
+    assert detect_conflicting_sources((bps_agree_a, bps_agree_b)) is False
+
+    bps_disagree = _member(
+        headline="Fed lowers benchmark rate by 50 basis points",
+        canonical_url="https://other.example.com/fomc-cut",
+        publisher="Other Wire",
+        source_class="reputable_secondary",
+        published_at=pub + timedelta(minutes=6),
+    )
+    assert detect_conflicting_sources((bps_agree_a, bps_disagree)) is True
 
     disagree_b = _member(
         headline="U.S. consumer prices rose 0.2% in August 2025",

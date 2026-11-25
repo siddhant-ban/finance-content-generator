@@ -408,7 +408,7 @@ def detect_conflicting_sources(members: tuple[ScoutMember, ...]) -> bool:
 
     headline_pcts = [_decimal_matches(_PERCENT_RE, m.headline) for m in members]
     nonempty_hl = [vals for vals in headline_pcts if vals]
-    if len(nonempty_hl) >= 2 and len(set().intersection(*nonempty_hl)) == 0:
+    if len(nonempty_hl) >= 2 and not set.intersection(*nonempty_hl):
         return True
 
     full_texts = [f"{m.headline} {m.source.excerpt or ''}" for m in members]
@@ -420,7 +420,7 @@ def detect_conflicting_sources(members: tuple[ScoutMember, ...]) -> bool:
 
     bps_sets = [_decimal_matches(_BPS_RE, text) for text in full_texts]
     nonempty_bps = [vals for vals in bps_sets if vals]
-    if len(nonempty_bps) >= 2 and len(set().intersection(*nonempty_bps)) == 0:
+    if len(nonempty_bps) >= 2 and not set.intersection(*nonempty_bps):
         return True
 
     rate_actions = {action for m in members if (action := _rate_action(m.headline)) is not None}

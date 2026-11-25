@@ -107,9 +107,10 @@ def format_result(report: ScoutRunOutput, store: ArtifactStore) -> str:
         candidate = StoryCandidate.model_validate_json(store.read(ref))
         lines.extend(_format_candidate(candidate))
         revisions = story_revisions(store, candidate.story_id)
-        if len(revisions) > 1:
-            lines.append(f"Prior revisions ({len(revisions) - 1})")
-            for record in revisions[:-1]:
+        prior = [record for record in revisions if record.revision < candidate.revision]
+        if prior:
+            lines.append(f"Prior revisions ({len(prior)})")
+            for record in prior:
                 lines.extend(_format_candidate(
                     record.candidate,
                     reason_code=record.reason_code,
