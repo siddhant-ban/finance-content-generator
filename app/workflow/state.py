@@ -148,13 +148,18 @@ class StateService:
         candidate=self._valid('candidate',artifacts['candidate'])
         return {stage:self._valid(stage,ref,kind=candidate.kind) for stage,ref in artifacts.items()}
 
-    def _stage_safety(self,target,artifacts,story_id):
+    def _stage_safety(self,target,artifacts,story_id,*,initial_cluster: bool=False):
         values=self._revalidate_retained(artifacts)
         if any(value.discovery_story_id is not None for value in values.values()):
+            if any(value.discovery_story_id not in (None,story_id) for value in values.values()):
+                raise PolicyDenied('discovery artifact belongs to a different story')
             if values['candidate'].discovery_story_id!=story_id:
                 raise PolicyDenied('discovery artifact belongs to a different story')
             if 'cluster' in artifacts and artifacts['cluster']!=artifacts['candidate']:
-                raise PolicyDenied('discovery checkpoints require the same artifact')
+                cand_rev=values['candidate'].discovery_revision
+                clus_rev=values['cluster'].discovery_revision
+                if initial_cluster or cand_rev is None or clus_rev is None or clus_rev<=cand_rev:
+                    raise PolicyDenied('discovery checkpoints require the same artifact')
         if target==StoryState.RESEARCHED:
             score=values.get('score')
             if score is None or score.decision!='ADVANCE' or not score.eligible: raise PolicyDenied('research requires eligible ADVANCE')
@@ -225,7 +230,7 @@ class StateService:
                 stage=STAGE_FOR[target]
                 if request.artifact is None: raise PolicyDenied('stage artifact required')
                 artifacts[stage]=request.artifact
-                self._stage_safety(target,artifacts,old.story_id)
+                self._stage_safety(target,artifacts,old.story_id,initial_cluster=(old.state==StoryState.DISCOVERED and target==StoryState.CLUSTERED))
             result=old.model_copy(update=dict(state=target,version=old.version+1,artifacts=artifacts,manifest=manifest,manifest_hash=manifest_hash,approval_id=None,resume_target=resume,failed_stage=failed,reason_code=request.reason_code))
             self._save(result,old,request.caller_scope,'transition',request.idempotency_key,fingerprint,request.reason_code,request.trace_id)
             self.conn.commit(); return result
