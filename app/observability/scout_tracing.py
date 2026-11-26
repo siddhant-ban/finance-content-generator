@@ -44,8 +44,12 @@ class _DispatchSpans:
         self._transition = transition_span
         self._dispatch = dispatch_span
 
-    def finalize(self, delivery_status: str, *, error_code: str | None = None) -> None:
+    def finalize(
+        self, delivery_status: str, *, error_code: str | None = None, artifact_hash: str | None = None,
+    ) -> None:
         attrs: dict[str, object] = {"delivery.status": delivery_status}
+        if artifact_hash is not None:
+            attrs["artifact.hash"] = artifact_hash
         if error_code is not None:
             attrs["error.code"] = error_code
         for span in (self._transition, self._dispatch):

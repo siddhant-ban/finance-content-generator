@@ -15,6 +15,12 @@ from app.contracts.scout import (
 )
 from app.observability.tracing import Telemetry
 from app.scout.feed_cli import add_feed_commands, manage_feeds
+from app.scout.replay import (
+    ScoutAuditReplayOutput,
+    ScoutReevalOutput,
+    reeval_scout,
+    replay_scout,
+)
 from app.scout.run import FeedPayload, ModelResult, ScoutRequestConflict, TokenBudgetExceeded, run_scout
 from app.scout.workflow import all_story_revisions, story_revisions
 from app.storage.artifacts import ArtifactStore
@@ -141,6 +147,54 @@ def format_history(store: ArtifactStore, story_id: UUID | None = None) -> str:
     return "\n".join(lines).lstrip("\n")
 
 
+def format_audit_replay(report: ScoutAuditReplayOutput) -> str:
+    cov = report.replay_coverage
+    lines = [
+        f"Mode: {report.replay_mode}  Network: {'disabled' if report.network_disabled else 'enabled'}  Dispatch: disabled",
+        f"Source run {report.source_run_id}  Invocation {report.source_invocation_id}",
+        f"Source input {report.source_input_sha256}",
+        f"Config {report.config_hash}  Prompt {report.prompt_hash}  Feed {report.feed_snapshot}",
+        f"Provider {_display(report.provider)}  Model {_display(report.model)}  Cluster {_display(report.cluster_version)}",
+        f"Coverage: {cov.status} ({cov.replayable_inputs}/{cov.total_inputs} replayable, {cov.unreplayable_inputs} unreplayable)",
+        f"All hashes matched: {report.all_hashes_matched}  Tokens: {report.reported_tokens.input_tokens}+{report.reported_tokens.output_tokens}",
+    ]
+    for unreplayable in report.unreplayable_items:
+        lines.append(
+            f"Unreplayable {_display(unreplayable.item_id)}  rights={unreplayable.rights}  reason={_display(unreplayable.reason)}"
+        )
+    for item in report.candidates:
+        lines.append("")
+        lines.append(f"Replayed Story {item.story_id}  Cluster {item.cluster_id}  Revision {item.revision}")
+        lines.append(f"Original SHA256 {item.original_artifact_sha256}  Reproduced SHA256 {item.reproduced_artifact_sha256}  Match {item.hash_matches}")
+        lines.extend(_format_candidate(item.candidate, artifact_sha256=item.reproduced_artifact_sha256))
+    return "\n".join(lines)
+
+
+def format_reeval(report: ScoutReevalOutput) -> str:
+    cov = report.replay_coverage
+    lines = [
+        f"Mode: {report.replay_mode}  Network: {'disabled' if report.network_disabled else 'enabled'}  Dispatch: disabled",
+        f"Run {report.run_id}  Invocation {report.invocation_id}  Trace {report.trace_id}",
+        f"Source run {report.source_run_id}  Source invocation {report.source_invocation_id}",
+        f"Source input {report.source_input_sha256}  Input {report.input_sha256}",
+        f"Experiment {_display(report.experiment_id)}  Spend cap USD {report.hard_spend_cap_usd}",
+        f"Source model {_display(report.source_model)}  Source prompt {report.source_prompt_hash}  Source config {report.source_config_hash}",
+        f"Provider {_display(report.provider)}  Model {_display(report.model)}  Prompt {_display(report.prompt_version)} ({report.prompt_hash})  Config {report.config_hash}",
+        f"Coverage: {cov.status} ({cov.replayable_inputs}/{cov.total_inputs} replayable, {cov.unreplayable_inputs} unreplayable)",
+        f"Tokens: {report.reported_tokens.input_tokens}+{report.reported_tokens.output_tokens}",
+    ]
+    for unreplayable in report.unreplayable_items:
+        lines.append(
+            f"Unreplayable {_display(unreplayable.item_id)}  rights={unreplayable.rights}  reason={_display(unreplayable.reason)}"
+        )
+    for item in report.candidates:
+        lines.append("")
+        lines.append(f"Re-evaluated Story {item.story_id}  Cluster {item.cluster_id}  Revision {item.revision}")
+        lines.append(f"Source SHA256 {item.original_artifact_sha256}  Reeval SHA256 {item.reproduced_artifact_sha256}")
+        lines.extend(_format_candidate(item.candidate, artifact_sha256=item.reproduced_artifact_sha256))
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -152,6 +206,29 @@ def main(argv: list[str] | None = None) -> int:
     history = commands.add_parser("history")
     history.add_argument("--output", type=Path, required=True, help="Local SQLite and artifact directory")
     history.add_argument("--story-id", type=UUID, required=False, help="Optional story UUID filter")
+
+    replay = commands.add_parser("replay")
+    replay.add_argument("--output", type=Path, required=True, help="Local SQLite and artifact directory")
+    replay.add_argument("--run-id", type=UUID, required=False, help="Source Scout run UUID")
+    replay.add_argument("--story-id", type=UUID, required=False, help="Target story UUID")
+    replay.add_argument("--revision", type=int, required=False, help="Optional story revision number")
+    replay.add_argument("--json", action="store_true", help="Emit canonical JSON report")
+
+    reeval = commands.add_parser("reeval")
+    reeval.add_argument("--output", type=Path, required=True, help="Local SQLite and artifact directory")
+    reeval.add_argument("--run-id", type=UUID, required=False, help="Source Scout run UUID")
+    reeval.add_argument("--story-id", type=UUID, required=False, help="Target story UUID")
+    reeval.add_argument("--revision", type=int, required=False, help="Optional story revision number")
+    reeval.add_argument("--recording", type=Path, required=False, help="Offline model response recording JSON")
+    reeval.add_argument("--model", type=str, required=False, help="Override model identifier")
+    reeval.add_argument("--provider", type=str, required=False, help="Override provider identifier")
+    reeval.add_argument("--prompt-version", type=str, required=False, help="Override prompt version")
+    reeval.add_argument("--prompt-hash", type=str, required=False, help="Override prompt SHA-256 hash")
+    reeval.add_argument("--temperature", type=float, required=False, help="Override temperature")
+    reeval.add_argument("--max-tokens", type=int, required=False, help="Override max token budget")
+    reeval.add_argument("--experiment-id", type=str, required=False, help="Distinct experiment budget identifier")
+    reeval.add_argument("--json", action="store_true", help="Emit canonical JSON report")
+
     args = parser.parse_args(argv)
     if args.command == "feeds":
         try:
@@ -165,6 +242,57 @@ def main(argv: list[str] | None = None) -> int:
             migrate(conn)
             store = ArtifactStore(root / "artifacts", conn)
             print(format_history(store, args.story_id))
+        return 0
+
+    if args.command == "replay":
+        if args.run_id is None and args.story_id is None:
+            parser.error("replay requires --run-id or --story-id")
+        root = args.output
+        with closing(open_database(root / "scout.sqlite3")) as conn:
+            migrate(conn)
+            store = ArtifactStore(root / "artifacts", conn)
+            try:
+                report = replay_scout(store, run_id=args.run_id, story_id=args.story_id, revision=args.revision)
+            except (OSError, ValueError, ValidationError) as error:
+                parser.error(str(error))
+            print(report.canonical_bytes().decode("utf-8") if args.json else format_audit_replay(report))
+        return int(any(item.hash_matches is False for item in report.candidates))
+
+    if args.command == "reeval":
+        if args.run_id is None and args.story_id is None:
+            parser.error("reeval requires --run-id or --story-id")
+        if args.recording is None:
+            parser.error("reeval requires --recording for offline evaluation")
+        try:
+            recording = ScoutRecording.model_validate_json(args.recording.read_bytes())
+        except (OSError, ValidationError):
+            parser.error("could not read a valid Scout recording")
+        root = args.output
+        with closing(open_database(root / "scout.sqlite3")) as conn:
+            migrate(conn)
+            store = ArtifactStore(root / "artifacts", conn)
+            telemetry = Telemetry(root / "scout-telemetry.sqlite3")
+            try:
+                report = reeval_scout(
+                    store,
+                    enrich=recording.enrich,
+                    source_run_id=args.run_id,
+                    story_id=args.story_id,
+                    revision=args.revision,
+                    model=args.model,
+                    provider=args.provider,
+                    prompt_version=args.prompt_version,
+                    prompt_hash=args.prompt_hash,
+                    temperature=args.temperature,
+                    max_tokens=args.max_tokens,
+                    experiment_id=args.experiment_id,
+                    telemetry=telemetry,
+                )
+            except (OSError, ValueError, ValidationError) as error:
+                parser.error(str(error))
+            finally:
+                telemetry.shutdown(timeout_seconds=0)
+            print(report.canonical_bytes().decode("utf-8") if args.json else format_reeval(report))
         return 0
 
     try:
