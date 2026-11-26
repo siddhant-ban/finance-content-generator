@@ -300,6 +300,35 @@ def test_overlapping_threaded_invocations_single_handoff_no_lost_candidates(tmp_
             assert [e.to_state for e in events] == [StoryState.DISCOVERED, StoryState.CLUSTERED]
 
 
+def test_duplicate_delivery_traces_the_existing_artifact(env):
+    _, _, store, telemetry = env
+    item = _feed_item(
+        headline="Consumer Price Index - September 2025",
+        canonical_url="https://www.bls.gov/news.release/archives/cpi_10152025.htm",
+    )
+
+    def fetch(*_args, **_kwargs):
+        return {"bls": item.canonical_bytes()}
+
+    def different_enrichment(request, members, **kwargs):
+        result = _enrich(request, members, **kwargs)
+        payload = json.loads(result.output)
+        payload["entities"] = ["CPI-U"]
+        return ModelResult(ScoutEnrichment.model_validate_json(json.dumps(payload)).canonical_bytes(), result.usage)
+
+    original = run_scout(_request(), store=store, telemetry=telemetry, fetch=fetch, enrich=_enrich)
+    duplicate = run_scout(_request(), store=store, telemetry=telemetry, fetch=fetch, enrich=different_enrichment)
+
+    assert duplicate.items[0].status == "unchanged", (original.items[0], duplicate.items[0])
+    assert duplicate.candidates == original.candidates
+    spans = {
+        span.name: span.attributes["artifact.hash"]
+        for _, span in telemetry.outbox.pending()
+        if span.trace_id == duplicate.trace_id and span.name in {"scout.dispatch", "workflow.transition"}
+    }
+    assert spans == dict.fromkeys(("scout.dispatch", "workflow.transition"), original.candidates[0].sha256)
+
+
 def test_interleaved_overlapping_invocation_mid_delivery_advances_new_source_without_loss(env, monkeypatch):
     _, conn, store, telemetry = env
     pub = datetime(2025, 10, 15, 12, 30, tzinfo=timezone.utc)

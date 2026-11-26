@@ -18,6 +18,8 @@ from pydantic import JsonValue, ValidationError
 from app.contracts.common import Nonempty, StrictModel, UtcDatetime
 from app.contracts.evidence import SourceRecord
 from app.contracts.scout import FeedPollReason, ScoutFeedItem, ScoutFeedPoll, ScoutRunInput
+from app.observability.scout_tracing import current_telemetry, finalize_fetch_span, scout_fetch_span
+from app.observability.tracing import Telemetry
 from app.scout.registry import FeedRegistry, FeedRevision, FeedSnapshot
 from app.scout.run import FeedBatch, FeedItemProblem
 
@@ -359,6 +361,7 @@ class RSSPoller:
         clock: Callable[[], float] = time.monotonic,
         max_bytes: int = DEFAULT_MAX_BYTES,
         max_feeds: int = DEFAULT_MAX_FEEDS,
+        telemetry: Telemetry | None = None,
     ) -> None:
         if max_bytes < 1:
             raise ValueError("max_bytes must be positive")
@@ -371,6 +374,7 @@ class RSSPoller:
         self.clock = clock
         self.max_bytes = max_bytes
         self.max_feeds = max_feeds
+        self.telemetry = telemetry
 
     def _load_cache(self, feed: FeedRevision) -> _CachedFeed | None:
         row = self.registry.conn.execute(
@@ -495,24 +499,38 @@ class RSSPoller:
         all_problems: dict[str, FeedItemProblem] = {}
         polls: list[ScoutFeedPoll] = []
 
+        tel = self.telemetry or current_telemetry()
         for index, feed in enumerate(self.snapshot.feeds):
-            if index >= self.max_feeds:
-                polls.append(ScoutFeedPoll(
-                    feed_id=feed.feed_id, revision=feed.revision,
-                    status="limited", reason="feed_limit",
-                ))
-                continue
-            remaining = deadline - self.clock()
-            if remaining <= 0:
-                polls.append(ScoutFeedPoll(
-                    feed_id=feed.feed_id, revision=feed.revision,
-                    status="limited", reason="time_limit",
-                ))
-                continue
+            with scout_fetch_span(
+                tel,
+                run_id=request.run_id,
+                feed_id=feed.feed_id,
+                feed_revision=feed.revision,
+                feed_snapshot=request.configuration.feed_snapshot,
+                request=request,
+            ) as span:
+                if index >= self.max_feeds:
+                    poll = ScoutFeedPoll(
+                        feed_id=feed.feed_id, revision=feed.revision,
+                        status="limited", reason="feed_limit",
+                    )
+                    finalize_fetch_span(span, poll, source_count=0)
+                    polls.append(poll)
+                    continue
+                remaining = deadline - self.clock()
+                if remaining <= 0:
+                    poll = ScoutFeedPoll(
+                        feed_id=feed.feed_id, revision=feed.revision,
+                        status="limited", reason="time_limit",
+                    )
+                    finalize_fetch_span(span, poll, source_count=0)
+                    polls.append(poll)
+                    continue
 
-            poll, feed_items, feed_problems = self._poll_one(feed, timeout=remaining)
-            polls.append(poll)
-            all_items.update(feed_items)
-            all_problems.update(feed_problems)
+                poll, feed_items, feed_problems = self._poll_one(feed, timeout=remaining)
+                finalize_fetch_span(span, poll, source_count=len(feed_items))
+                polls.append(poll)
+                all_items.update(feed_items)
+                all_problems.update(feed_problems)
 
         return FeedBatch(items=all_items, polls=tuple(polls), problems=all_problems)
